@@ -7,6 +7,7 @@ import json
 import struct
 import ctypes
 from ctypes import *
+from can_protocol_config import *  # 导入配置文件
 
 # 创芯科技CAN API常量
 VCI_USBCAN2 = 4
@@ -176,6 +177,39 @@ class CANHostComputer:
         # 创建界面
         self.create_widgets()
         
+    def log_message(self, message, color="black"):
+        """添加日志消息"""
+        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        
+        # 插入时间戳
+        self.log_text.insert(tk.END, f"[{timestamp}] ")
+        
+        # 检查是否包含"心跳状态"
+        if "心跳状态" in message:
+            # 分割消息，找到"心跳状态"的位置
+            parts = message.split("心跳状态")
+            if len(parts) == 2:
+                # 插入前半部分
+                self.log_text.insert(tk.END, parts[0])
+                
+                # 插入红色的"心跳状态"
+                start_pos = self.log_text.index("end-1c")
+                self.log_text.insert(tk.END, "心跳状态")
+                end_pos = self.log_text.index("end-1c")
+                self.log_text.tag_add("heartbeat_red", start_pos, end_pos)
+                
+                # 插入后半部分
+                self.log_text.insert(tk.END, parts[1])
+            else:
+                # 如果分割失败，直接插入
+                self.log_text.insert(tk.END, message)
+        else:
+            # 普通消息直接插入
+            self.log_text.insert(tk.END, message)
+        
+        self.log_text.insert(tk.END, "\n")
+        self.log_text.see(tk.END)
+    
     def create_widgets(self):
         # 主框架
         main_frame = ttk.Frame(self.root)
@@ -282,6 +316,13 @@ class CANHostComputer:
         self.heartbeat_status_var = tk.StringVar(value="正常")
         ttk.Label(stats_inner, textvariable=self.heartbeat_status_var).grid(row=0, column=5, padx=5)
         
+        # 数据表格显示框架
+        data_frame = ttk.LabelFrame(main_frame, text="实时数据", padding="10")
+        data_frame.pack(fill="x", pady=5)
+        
+        # 创建表格
+        self.create_data_table(data_frame)
+        
         # 日志框架
         log_frame = ttk.LabelFrame(main_frame, text="通信日志", padding="10")
         log_frame.pack(fill="both", expand=True, pady=5)
@@ -289,6 +330,9 @@ class CANHostComputer:
         # 日志文本框
         self.log_text = scrolledtext.ScrolledText(log_frame, height=15)
         self.log_text.pack(fill="both", expand=True)
+        
+        # 配置文本标签颜色
+        self.log_text.tag_configure("heartbeat_red", foreground="red")
         
         # 日志控制按钮
         log_btn_frame = ttk.Frame(log_frame)
@@ -299,13 +343,6 @@ class CANHostComputer:
         
         save_btn = ttk.Button(log_btn_frame, text="保存日志", command=self.save_log)
         save_btn.pack(side="left", padx=5)
-        
-    def log_message(self, message):
-        """添加日志消息"""
-        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-        log_entry = f"[{timestamp}] {message}\n"
-        self.log_text.insert(tk.END, log_entry)
-        self.log_text.see(tk.END)
         
     def clear_log(self):
         """清空日志"""
@@ -344,6 +381,7 @@ class CANHostComputer:
             self.receive_check.config(state="normal")  # 启用接收复选框
             
             self.status_var.set("已连接")
+            self.heartbeat_status_var.set("等待")  # 初始状态为等待
             self.log_message("CAN设备连接成功")
             
         except Exception as e:
@@ -459,6 +497,80 @@ class CANHostComputer:
         data[7] = 0x00  # Byte 7: reserved for future use
         return data
                 
+    def parse_heartbeat_message(self, msg):
+        """解析0x351报文 - 充放电信息（用作心跳标志）"""
+        try:
+            data = msg['data']
+            parsed_data = parse_351_message(data)
+            
+            if parsed_data:
+                # 更新表格
+                self.update_table_data(0x351, parsed_data)
+                
+                self.log_message(f"充放电信息 - 充电电压限制: {parsed_data['charge_voltage_limit']:.1f}V, 最大充电电流: {parsed_data['max_charge_current']:.1f}A, 最大放电电流: {parsed_data['max_discharge_current']:.1f}A, 放电电压: {parsed_data['discharge_voltage']:.1f}V")
+            else:
+                self.log_message(f"0x351报文数据长度不足: {len(data)} 字节")
+                
+        except Exception as e:
+            self.log_message(f"解析0x351报文错误: {str(e)}")
+    
+    def parse_bms_status_message(self, msg):
+        """解析BMS状态报文 (0x355)"""
+        try:
+            data = msg['data']
+            parsed_data = parse_355_message(data)
+            
+            if parsed_data:
+                # 更新表格
+                self.update_table_data(0x355, parsed_data)
+                
+                self.log_message(f"BMS状态 - SOC: {parsed_data['soc_value']}%, SOH: {parsed_data['soh_value']}%, 高精度SOC: {parsed_data['high_res_soc']:.2f}%")
+            else:
+                self.log_message(f"0x355报文数据长度不足: {len(data)} 字节")
+                
+        except Exception as e:
+            self.log_message(f"解析BMS状态报文错误: {str(e)}")
+    
+    def parse_battery_info_message(self, msg):
+        """解析电池信息报文 (0x356)"""
+        try:
+            data = msg['data']
+            parsed_data = parse_356_message(data)
+            
+            if parsed_data:
+                # 更新表格
+                self.update_table_data(0x356, parsed_data)
+                
+                self.log_message(f"电池信息 - 电压: {parsed_data['battery_voltage']:.2f}V, 电流: {parsed_data['battery_current']:.1f}A, 温度: {parsed_data['battery_temperature']:.1f}°C")
+            else:
+                self.log_message(f"0x356报文数据长度不足: {len(data)} 字节")
+                
+        except Exception as e:
+            self.log_message(f"解析电池信息报文错误: {str(e)}")
+    
+    def parse_error_message(self, msg):
+        """解析错误报文 (0x35A)"""
+        try:
+            data = msg['data']
+            parsed_data = parse_35A_message(data)
+            
+            if parsed_data:
+                # 更新表格
+                self.update_table_data(0x35A, parsed_data)
+                
+                # 记录警告信息
+                warnings = parsed_data['warnings']
+                active_warnings = [name for name, active in warnings.items() if active]
+                if active_warnings:
+                    self.log_message(f"检测到警告: {', '.join(active_warnings)}")
+                else:
+                    self.log_message("无警告信息")
+            else:
+                self.log_message(f"0x35A报文数据长度不足: {len(data)} 字节")
+                
+        except Exception as e:
+            self.log_message(f"解析错误报文错误: {str(e)}")
+    
     def monitor_heartbeat(self):
         """监控心跳的线程函数"""
         self.log_message("心跳监控线程已启动")
@@ -474,18 +586,19 @@ class CANHostComputer:
                         self.received_count_var.set(str(self.received_count))
                         self.process_received_message(msg)
                         
-                        # 检查心跳报文
+                        # 检查心跳报文（0x351作为心跳标志）
                         if msg['id'] == 0x351:
                             self.last_heartbeat_time = time.time()
                             self.heartbeat_status_var.set("正常")
-                            self.log_message(f"收到心跳: ID=0x351, 数据: {bytes(msg['data']).hex()}")
+                            self.log_message(f"收到心跳标志: ID=0x351, 数据: {bytes(msg['data']).hex()}")
                             
             except Exception as e:
                 self.log_message(f"接收线程错误: {str(e)}")
-                # 检查心跳超时
-                if self.last_heartbeat_time and (time.time() - self.last_heartbeat_time) > 3:
-                    self.root.after(0, self.handle_heartbeat_timeout)
-        
+                
+            # 检查心跳超时（3秒未收到0x351）
+            if self.last_heartbeat_time and (time.time() - self.last_heartbeat_time) > 3:
+                self.root.after(0, self.handle_heartbeat_timeout)
+    
     def process_received_message(self, msg):
         """处理接收到的CAN报文"""
         msg_id = msg['id']
@@ -503,15 +616,6 @@ class CANHostComputer:
             elif msg_id == 0x35A:
                 self.parse_error_message(msg)
                 
-    def parse_heartbeat_message(self, msg):
-        """解析心跳报文 (0x351)"""
-        try:
-            data = msg['data']
-            status = data[0] if len(data) > 0 else 0
-            self.log_message(f"心跳状态: {status}")
-        except Exception as e:
-            self.log_message(f"解析心跳报文错误: {str(e)}")
-        
     def parse_bms_status_message(self, msg):
         """解析BMS状态报文 (0x355)"""
         try:
@@ -541,10 +645,10 @@ class CANHostComputer:
         
     def handle_heartbeat_timeout(self):
         """处理心跳超时"""
-        self.heartbeat_status_var.set("超时")
-        messagebox.showwarning("心跳超时", "BMS心跳终止")
-        self.log_message("警告: BMS心跳终止，断开CAN连接")
-        self.disconnect_can()
+        self.heartbeat_status_var.set("停止")
+        messagebox.showwarning("心跳超时", "BMS心跳终止 - 3秒未收到0x351报文")
+        self.log_message("警告: BMS心跳终止，3秒未收到0x351报文")
+        # 注意：这里不自动断开连接，只是提示心跳停止
 
     def test_receive(self):
         """手动测试接收功能"""
@@ -706,6 +810,115 @@ class CANHostComputer:
                 # 检查心跳超时
                 if self.last_heartbeat_time and (time.time() - self.last_heartbeat_time) > 3:
                     self.root.after(0, self.handle_heartbeat_timeout)
+
+    def create_data_table(self, parent):
+        """创建数据表格"""
+        # 创建表格框架
+        table_frame = ttk.Frame(parent)
+        table_frame.pack(fill="x")
+        
+        # 创建Treeview表格 - 添加CAN ID列
+        columns = ('CAN ID', '参数', '数值', '单位', '状态')
+        self.data_tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=8)
+        
+        # 设置列标题
+        for col in columns:
+            self.data_tree.heading(col, text=col)
+            # 调整列宽
+            if col == 'CAN ID':
+                self.data_tree.column(col, width=80, anchor='center')
+            elif col == '参数':
+                self.data_tree.column(col, width=150, anchor='w')
+            elif col == '数值':
+                self.data_tree.column(col, width=100, anchor='center')
+            elif col == '单位':
+                self.data_tree.column(col, width=60, anchor='center')
+            elif col == '状态':
+                self.data_tree.column(col, width=80, anchor='center')
+        
+        # 添加滚动条
+        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.data_tree.yview)
+        self.data_tree.configure(yscrollcommand=scrollbar.set)
+        
+        # 布局
+        self.data_tree.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # 初始化表格数据
+        self.initialize_table_data()
+    
+    def initialize_table_data(self):
+        """初始化表格数据"""
+        # 清空现有数据
+        for item in self.data_tree.get_children():
+            self.data_tree.delete(item)
+        
+        # 添加0x351数据项
+        self.data_tree.insert('', 'end', values=('0x351', '充电电压限制', '--', 'V', '等待'))
+        self.data_tree.insert('', 'end', values=('0x351', '最大充电电流', '--', 'A', '等待'))
+        self.data_tree.insert('', 'end', values=('0x351', '最大放电电流', '--', 'A', '等待'))
+        self.data_tree.insert('', 'end', values=('0x351', '放电电压', '--', 'V', '等待'))
+        
+        # 添加0x355数据项
+        self.data_tree.insert('', 'end', values=('0x355', 'SOC值', '--', '%', '等待'))
+        self.data_tree.insert('', 'end', values=('0x355', 'SOH值', '--', '%', '等待'))
+        self.data_tree.insert('', 'end', values=('0x355', '高精度SOC', '--', '%', '等待'))
+        
+        # 添加0x356数据项
+        self.data_tree.insert('', 'end', values=('0x356', '电池电压', '--', 'V', '等待'))
+        self.data_tree.insert('', 'end', values=('0x356', '电池电流', '--', 'A', '等待'))
+        self.data_tree.insert('', 'end', values=('0x356', '电池温度', '--', '°C', '等待'))
+        
+        # 添加0x35A数据项
+        self.data_tree.insert('', 'end', values=('0x35A', '系统状态', '--', '', '等待'))
+        self.data_tree.insert('', 'end', values=('0x35A', '电池高压警告', '--', '', '等待'))
+        self.data_tree.insert('', 'end', values=('0x35A', '电池低压警告', '--', '', '等待'))
+        self.data_tree.insert('', 'end', values=('0x35A', '电池高温警告', '--', '', '等待'))
+        self.data_tree.insert('', 'end', values=('0x35A', '电池低温警告', '--', '', '等待'))
+        self.data_tree.insert('', 'end', values=('0x35A', '电池过流警告', '--', '', '等待'))
+        self.data_tree.insert('', 'end', values=('0x35A', 'BMS内部警告', '--', '', '等待'))
+        self.data_tree.insert('', 'end', values=('0x35A', '电池不平衡警告', '--', '', '等待'))
+    
+    def update_table_data(self, can_id, parsed_data):
+        """更新表格数据"""
+        if can_id == 0x351:
+            # 更新0x351数据
+            self.update_table_item('0x351', '充电电压限制', f"{parsed_data.get('charge_voltage_limit', 0):.1f}", 'V', '正常')
+            self.update_table_item('0x351', '最大充电电流', f"{parsed_data.get('max_charge_current', 0):.1f}", 'A', '正常')
+            self.update_table_item('0x351', '最大放电电流', f"{parsed_data.get('max_discharge_current', 0):.1f}", 'A', '正常')
+            self.update_table_item('0x351', '放电电压', f"{parsed_data.get('discharge_voltage', 0):.1f}", 'V', '正常')
+            
+        elif can_id == 0x355:
+            # 更新0x355数据
+            self.update_table_item('0x355', 'SOC值', f"{parsed_data.get('soc_value', 0)}", '%', '正常')
+            self.update_table_item('0x355', 'SOH值', f"{parsed_data.get('soh_value', 0)}", '%', '正常')
+            self.update_table_item('0x355', '高精度SOC', f"{parsed_data.get('high_res_soc', 0):.2f}", '%', '正常')
+            
+        elif can_id == 0x356:
+            # 更新0x356数据
+            self.update_table_item('0x356', '电池电压', f"{parsed_data.get('battery_voltage', 0):.2f}", 'V', '正常')
+            self.update_table_item('0x356', '电池电流', f"{parsed_data.get('battery_current', 0):.1f}", 'A', '正常')
+            self.update_table_item('0x356', '电池温度', f"{parsed_data.get('battery_temperature', 0):.1f}", '°C', '正常')
+            
+        elif can_id == 0x35A:
+            # 更新0x35A警告状态
+            warnings = parsed_data.get('warnings', {})
+            self.update_table_item('0x35A', '系统状态', '在线' if warnings.get('system_online', False) else '离线', '', '正常')
+            self.update_table_item('0x35A', '电池高压警告', '是' if warnings.get('battery_high_voltage', False) else '否', '', '正常')
+            self.update_table_item('0x35A', '电池低压警告', '是' if warnings.get('battery_low_voltage', False) else '否', '', '正常')
+            self.update_table_item('0x35A', '电池高温警告', '是' if warnings.get('battery_high_temp', False) else '否', '', '正常')
+            self.update_table_item('0x35A', '电池低温警告', '是' if warnings.get('battery_low_temp', False) else '否', '', '正常')
+            self.update_table_item('0x35A', '电池过流警告', '是' if warnings.get('battery_high_current', False) else '否', '', '正常')
+            self.update_table_item('0x35A', 'BMS内部警告', '是' if warnings.get('bms_internal', False) else '否', '', '正常')
+            self.update_table_item('0x35A', '电池不平衡警告', '是' if warnings.get('cell_imbalance', False) else '否', '', '正常')
+    
+    def update_table_item(self, can_id, parameter, value, unit, status):
+        """更新表格中的单个项目"""
+        for item in self.data_tree.get_children():
+            values = self.data_tree.item(item)['values']
+            if values[0] == can_id and values[1] == parameter:
+                self.data_tree.item(item, values=(can_id, parameter, value, unit, status))
+                break
 
 def main():
     root = tk.Tk()
