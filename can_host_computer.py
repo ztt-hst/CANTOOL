@@ -165,6 +165,7 @@ class CANHostComputer:
         self.can_bus = None
         self.is_connected = False
         self.is_running = False
+        self.is_receiving = False  # 新增接收状态
         self.last_heartbeat_time = None
         self.heartbeat_monitor_thread = None
         
@@ -231,11 +232,28 @@ class CANHostComputer:
         btn_frame = ttk.Frame(control_frame)
         btn_frame.pack(fill="x")
         
-        self.start_btn = ttk.Button(btn_frame, text="启动发送", command=self.start_sending, state="disabled")
+        # 发送控制
+        send_frame = ttk.Frame(btn_frame)
+        send_frame.pack(side="left", padx=10)
+        
+        ttk.Label(send_frame, text="发送控制:").pack(side="left")
+        self.start_btn = ttk.Button(send_frame, text="启动发送", command=self.start_sending, state="disabled")
         self.start_btn.pack(side="left", padx=5)
         
-        self.stop_btn = ttk.Button(btn_frame, text="停止发送", command=self.stop_sending, state="disabled")
+        self.stop_btn = ttk.Button(send_frame, text="停止发送", command=self.stop_sending, state="disabled")
         self.stop_btn.pack(side="left", padx=5)
+        
+        # 接收控制
+        receive_frame = ttk.Frame(btn_frame)
+        receive_frame.pack(side="left", padx=10)
+        
+        ttk.Label(receive_frame, text="接收控制:").pack(side="left")
+        self.receive_var = tk.BooleanVar(value=False)
+        self.receive_check = ttk.Checkbutton(receive_frame, text="开启接收", 
+                                           variable=self.receive_var, 
+                                           command=self.toggle_receive, 
+                                           state="disabled")
+        self.receive_check.pack(side="left", padx=5)
         
         # 状态显示
         self.status_var = tk.StringVar(value="未连接")
@@ -282,18 +300,6 @@ class CANHostComputer:
         save_btn = ttk.Button(log_btn_frame, text="保存日志", command=self.save_log)
         save_btn.pack(side="left", padx=5)
         
-        # 在控制按钮区域添加测试按钮
-        test_btn = ttk.Button(btn_frame, text="测试接收", command=self.test_receive)
-        test_btn.pack(side="left", padx=5)
-        
-        # 在控制按钮区域添加诊断按钮
-        diagnose_btn = ttk.Button(btn_frame, text="连接诊断", command=self.diagnose_connection)
-        diagnose_btn.pack(side="left", padx=5)
-        
-        # 在控制按钮区域添加通道切换按钮
-        switch_channel_btn = ttk.Button(btn_frame, text="切换通道", command=self.switch_channel)
-        switch_channel_btn.pack(side="left", padx=5)
-        
     def log_message(self, message):
         """添加日志消息"""
         timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -335,14 +341,10 @@ class CANHostComputer:
             self.connect_btn.config(state="disabled")
             self.disconnect_btn.config(state="normal")
             self.start_btn.config(state="normal")
+            self.receive_check.config(state="normal")  # 启用接收复选框
             
             self.status_var.set("已连接")
             self.log_message("CAN设备连接成功")
-            
-            # 立即测试接收
-            self.log_message("开始测试接收...")
-            test_thread = threading.Thread(target=self._initial_receive_test, daemon=True)
-            test_thread.start()
             
         except Exception as e:
             messagebox.showerror("连接错误", f"无法连接CAN设备: {str(e)}")
@@ -375,6 +377,7 @@ class CANHostComputer:
         """断开CAN连接"""
         if self.can_bus:
             self.stop_sending()
+            self.stop_receiving()
             self.can_bus.disconnect()
             self.can_bus = None
             
@@ -383,10 +386,12 @@ class CANHostComputer:
         self.disconnect_btn.config(state="disabled")
         self.start_btn.config(state="disabled")
         self.stop_btn.config(state="disabled")
+        self.receive_check.config(state="disabled")  # 禁用接收复选框
+        self.receive_var.set(False)  # 取消勾选
         
         self.status_var.set("未连接")
         self.log_message("CAN设备已断开")
-        
+    
     def start_sending(self):
         """开始发送CAN报文"""
         if not self.is_connected:
@@ -400,12 +405,8 @@ class CANHostComputer:
         self.send_thread = threading.Thread(target=self.send_messages, daemon=True)
         self.send_thread.start()
         
-        # 启动心跳监控线程
-        self.heartbeat_monitor_thread = threading.Thread(target=self.monitor_heartbeat, daemon=True)
-        self.heartbeat_monitor_thread.start()
-        
         self.log_message("开始发送CAN报文")
-        
+    
     def stop_sending(self):
         """停止发送CAN报文"""
         self.is_running = False
@@ -461,10 +462,10 @@ class CANHostComputer:
     def monitor_heartbeat(self):
         """监控心跳的线程函数"""
         self.log_message("心跳监控线程已启动")
-        while self.is_running and self.is_connected:
+        while self.is_receiving and self.is_connected:
             try:
-                # 接收CAN报文 - 减少超时时间
-                messages = self.can_bus.receive(timeout=50)  # 从100ms改为50ms
+                # 接收CAN报文
+                messages = self.can_bus.receive(timeout=50)
                 
                 if messages:
                     self.log_message(f"接收到 {len(messages)} 个报文")
@@ -478,17 +479,13 @@ class CANHostComputer:
                             self.last_heartbeat_time = time.time()
                             self.heartbeat_status_var.set("正常")
                             self.log_message(f"收到心跳: ID=0x351, 数据: {bytes(msg['data']).hex()}")
-                else:
-                    # 减少调试信息频率
-                    if time.time() % 10 < 0.1:  # 每10秒显示一次
-                        self.log_message("正在监听CAN报文...")
                             
             except Exception as e:
                 self.log_message(f"接收线程错误: {str(e)}")
                 # 检查心跳超时
                 if self.last_heartbeat_time and (time.time() - self.last_heartbeat_time) > 3:
                     self.root.after(0, self.handle_heartbeat_timeout)
-                    
+        
     def process_received_message(self, msg):
         """处理接收到的CAN报文"""
         msg_id = msg['id']
@@ -656,6 +653,59 @@ class CANHostComputer:
             
         except Exception as e:
             self.log_message(f"强制接收测试错误: {str(e)}")
+
+    def toggle_receive(self):
+        """切换接收状态"""
+        if self.receive_var.get():
+            self.start_receiving()
+        else:
+            self.stop_receiving()
+
+    def start_receiving(self):
+        """开始接收"""
+        if not self.is_connected:
+            return
+            
+        self.is_receiving = True
+        self.log_message("开始接收CAN报文")
+        
+        # 启动心跳监控线程
+        self.heartbeat_monitor_thread = threading.Thread(target=self.monitor_heartbeat, daemon=True)
+        self.heartbeat_monitor_thread.start()
+    
+    def stop_receiving(self):
+        """停止接收"""
+        self.is_receiving = False
+        self.log_message("停止接收CAN报文")
+    
+    def monitor_receive(self):
+        """接收报文的独立线程函数"""
+        self.log_message("接收报文线程已启动")
+        while self.is_running and self.is_connected and self.receive_var.get():
+            try:
+                messages = self.can_bus.receive(timeout=50) # 更短的超时时间
+                if messages:
+                    self.log_message(f"接收到 {len(messages)} 个报文")
+                    for msg in messages:
+                        self.received_count += 1
+                        self.received_count_var.set(str(self.received_count))
+                        self.process_received_message(msg)
+                        
+                        # 检查心跳报文
+                        if msg['id'] == 0x351:
+                            self.last_heartbeat_time = time.time()
+                            self.heartbeat_status_var.set("正常")
+                            self.log_message(f"收到心跳: ID=0x351, 数据: {bytes(msg['data']).hex()}")
+                else:
+                    # 减少调试信息频率
+                    if time.time() % 10 < 0.1:  # 每10秒显示一次
+                        self.log_message("正在监听CAN报文...")
+                            
+            except Exception as e:
+                self.log_message(f"接收线程错误: {str(e)}")
+                # 检查心跳超时
+                if self.last_heartbeat_time and (time.time() - self.last_heartbeat_time) > 3:
+                    self.root.after(0, self.handle_heartbeat_timeout)
 
 def main():
     root = tk.Tk()
