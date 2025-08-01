@@ -616,33 +616,6 @@ class CANHostComputer:
             elif msg_id == 0x35A:
                 self.parse_error_message(msg)
                 
-    def parse_bms_status_message(self, msg):
-        """解析BMS状态报文 (0x355)"""
-        try:
-            data = msg['data']
-            # 根据协议解析BMS状态
-            self.log_message("解析BMS状态报文")
-        except Exception as e:
-            self.log_message(f"解析BMS状态报文错误: {str(e)}")
-        
-    def parse_battery_info_message(self, msg):
-        """解析电池信息报文 (0x356)"""
-        try:
-            data = msg['data']
-            # 根据协议解析电池信息
-            self.log_message("解析电池信息报文")
-        except Exception as e:
-            self.log_message(f"解析电池信息报文错误: {str(e)}")
-        
-    def parse_error_message(self, msg):
-        """解析错误报文 (0x35A)"""
-        try:
-            data = msg['data']
-            # 根据协议解析错误信息
-            self.log_message("解析错误报文")
-        except Exception as e:
-            self.log_message(f"解析错误报文错误: {str(e)}")
-        
     def handle_heartbeat_timeout(self):
         """处理心跳超时"""
         self.heartbeat_status_var.set("停止")
@@ -869,8 +842,7 @@ class CANHostComputer:
         self.data_tree.insert('', 'end', values=('0x356', '电池电流', '--', 'A', '等待'))
         self.data_tree.insert('', 'end', values=('0x356', '电池温度', '--', '°C', '等待'))
         
-        # 添加0x35A数据项
-        self.data_tree.insert('', 'end', values=('0x35A', '系统状态', '--', '', '等待'))
+        # 添加0x35A数据项（只包含警告信息）
         self.data_tree.insert('', 'end', values=('0x35A', '电池高压警告', '--', '', '等待'))
         self.data_tree.insert('', 'end', values=('0x35A', '电池低压警告', '--', '', '等待'))
         self.data_tree.insert('', 'end', values=('0x35A', '电池高温警告', '--', '', '等待'))
@@ -901,9 +873,8 @@ class CANHostComputer:
             self.update_table_item('0x356', '电池温度', f"{parsed_data.get('battery_temperature', 0):.1f}", '°C', '正常')
             
         elif can_id == 0x35A:
-            # 更新0x35A警告状态
+            # 更新0x35A警告状态（移除系统状态）
             warnings = parsed_data.get('warnings', {})
-            self.update_table_item('0x35A', '系统状态', '在线' if warnings.get('system_online', False) else '离线', '', '正常')
             self.update_table_item('0x35A', '电池高压警告', '是' if warnings.get('battery_high_voltage', False) else '否', '', '正常')
             self.update_table_item('0x35A', '电池低压警告', '是' if warnings.get('battery_low_voltage', False) else '否', '', '正常')
             self.update_table_item('0x35A', '电池高温警告', '是' if warnings.get('battery_high_temp', False) else '否', '', '正常')

@@ -153,30 +153,34 @@ def parse_35A_message(data):
         
         # Byte 4: 警告信息
         byte4 = data[4]
-        warnings['battery_high_voltage'] = bool(byte4 & 0x0C)  # bits 2+3
-        warnings['battery_low_voltage'] = bool(byte4 & 0x30)    # bits 4+5
-        warnings['battery_high_temp'] = bool(byte4 & 0xC0)      # bits 6+7
+        warnings['general_warning'] = bool(byte4 & 0x03)        # bits 0+1
+        warnings['battery_high_voltage'] = bool(byte4 & 0x0C)    # bits 2+3
+        warnings['battery_low_voltage'] = bool(byte4 & 0x30)     # bits 4+5
+        warnings['battery_high_temp'] = bool(byte4 & 0xC0)       # bits 6+7
         
         # Byte 5: 更多警告信息
         byte5 = data[5]
-        warnings['battery_low_temp'] = bool(byte5 & 0x03)       # bits 0+1
-        warnings['battery_high_temp_charge'] = bool(byte5 & 0x0C)  # bits 2+3
-        warnings['battery_low_temp_charge'] = bool(byte5 & 0x30)    # bits 4+5
-        warnings['battery_high_current'] = bool(byte5 & 0xC0)       # bits 6+7
+        warnings['battery_low_temp'] = bool(byte5 & 0x03)        # bits 0+1
+        warnings['battery_high_temp_charge'] = bool(byte5 & 0x0C) # bits 2+3
+        warnings['battery_low_temp_charge'] = bool(byte5 & 0x30)  # bits 4+5
+        warnings['battery_high_current'] = bool(byte5 & 0xC0)     # bits 6+7
         
         # Byte 6: 更多警告信息
         byte6 = data[6]
-        warnings['battery_high_charge_current'] = bool(byte6 & 0x03)  # bits 0+1
-        warnings['bms_internal'] = bool(byte6 & 0xC0)                 # bits 6+7
+        warnings['battery_high_charge_current'] = bool(byte6 & 0x03) # bits 0+1
+        warnings['contactor_warning'] = bool(byte6 & 0x0C)           # bits 2+3
+        warnings['short_circuit_warning'] = bool(byte6 & 0x30)       # bits 4+5
+        warnings['bms_internal'] = bool(byte6 & 0xC0)                # bits 6+7
         
-        # Byte 7: 系统状态和更多警告
+        # Byte 7: 更多警告信息
         byte7 = data[7]
         warnings['cell_imbalance'] = bool(byte7 & 0x03)          # bits 0+1
-        warnings['system_online'] = bool(byte7 & 0x0C)           # bits 2+3
+        # bits 2-7: Reserved (保留位)
         
         return {'warnings': warnings}
     else:
         return None
+
 
 # 通用解析函数
 def parse_can_message(can_id, data):
