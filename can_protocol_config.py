@@ -146,9 +146,38 @@ def parse_356_message(data):
         return None
 
 def parse_35A_message(data):
-    """解析0x35A报文 - BMS警告信息"""
+    """解析0x35A报文 - BMS警告和报警信息"""
     if len(data) >= 8:
-        # 解析警告位
+        # 解析报警位（字节0-3）
+        alarms = {}
+        
+        # Byte 0: 报警信息
+        byte0 = data[0]
+        alarms['general_alarm'] = bool(byte0 & 0x03)        # bits 0+1
+        alarms['battery_high_voltage_alarm'] = bool(byte0 & 0x0C)    # bits 2+3
+        alarms['battery_low_voltage_alarm'] = bool(byte0 & 0x30)     # bits 4+5
+        alarms['battery_high_temp_alarm'] = bool(byte0 & 0xC0)       # bits 6+7
+        
+        # Byte 1: 更多报警信息
+        byte1 = data[1]
+        alarms['battery_low_temp_alarm'] = bool(byte1 & 0x03)        # bits 0+1
+        alarms['battery_high_temp_charge_alarm'] = bool(byte1 & 0x0C) # bits 2+3
+        alarms['battery_low_temp_charge_alarm'] = bool(byte1 & 0x30)  # bits 4+5
+        alarms['battery_high_current_alarm'] = bool(byte1 & 0xC0)     # bits 6+7
+        
+        # Byte 2: 更多报警信息
+        byte2 = data[2]
+        alarms['battery_high_charge_current_alarm'] = bool(byte2 & 0x03) # bits 0+1
+        alarms['contactor_alarm'] = bool(byte2 & 0x0C)                   # bits 2+3
+        alarms['short_circuit_alarm'] = bool(byte2 & 0x30)               # bits 4+5
+        alarms['bms_internal_alarm'] = bool(byte2 & 0xC0)                # bits 6+7
+        
+        # Byte 3: 更多报警信息
+        byte3 = data[3]
+        alarms['cell_imbalance_alarm'] = bool(byte3 & 0x03)          # bits 0+1
+        # bits 2-7: Reserved (保留位)
+        
+        # 解析警告位（字节4-7）
         warnings = {}
         
         # Byte 4: 警告信息
@@ -172,12 +201,16 @@ def parse_35A_message(data):
         warnings['short_circuit_warning'] = bool(byte6 & 0x30)       # bits 4+5
         warnings['bms_internal'] = bool(byte6 & 0xC0)                # bits 6+7
         
-        # Byte 7: 更多警告信息
+        # Byte 7: 系统状态和更多警告
         byte7 = data[7]
         warnings['cell_imbalance'] = bool(byte7 & 0x03)          # bits 0+1
-        # bits 2-7: Reserved (保留位)
+        warnings['system_online'] = bool(byte7 & 0x0C)           # bits 2+3 (System status)
+        # bits 4-7: Reserved (保留位)
         
-        return {'warnings': warnings}
+        return {
+            'alarms': alarms,
+            'warnings': warnings
+        }
     else:
         return None
 

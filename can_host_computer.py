@@ -173,6 +173,7 @@ class CANHostComputer:
         # 统计变量
         self.sent_count = 0
         self.received_count = 0
+        self.heartbeat_count = 0  # 新增心跳计数器
         
         # 创建界面
         self.create_widgets()
@@ -382,6 +383,12 @@ class CANHostComputer:
             
             self.status_var.set("已连接")
             self.heartbeat_status_var.set("等待")  # 初始状态为等待
+            self.heartbeat_count = 0  # 重置心跳计数
+            
+            # 重置表格中的心跳状态
+            current_time = datetime.now().strftime("%H:%M:%S")
+            self.update_table_item('0x351', '心跳状态', '0', '', '等待', current_time)
+            
             self.log_message("CAN设备连接成功")
             
         except Exception as e:
@@ -428,6 +435,12 @@ class CANHostComputer:
         self.receive_var.set(False)  # 取消勾选
         
         self.status_var.set("未连接")
+        self.heartbeat_count = 0  # 重置心跳计数
+        
+        # 重置表格中的心跳状态
+        current_time = datetime.now().strftime("%H:%M:%S")
+        self.update_table_item('0x351', '心跳状态', '0', '', '停止', current_time)
+        
         self.log_message("CAN设备已断开")
     
     def start_sending(self):
@@ -589,7 +602,13 @@ class CANHostComputer:
                         # 检查心跳报文（0x351作为心跳标志）
                         if msg['id'] == 0x351:
                             self.last_heartbeat_time = time.time()
+                            self.heartbeat_count += 1  # 增加心跳计数
                             self.heartbeat_status_var.set("正常")
+                            
+                            # 更新表格中的心跳状态
+                            current_time = datetime.now().strftime("%H:%M:%S")
+                            self.update_table_item('0x351', '心跳状态', str(self.heartbeat_count), '', '正常', current_time)
+                            
                             self.log_message(f"收到心跳标志: ID=0x351, 数据: {bytes(msg['data']).hex()}")
                             
             except Exception as e:
@@ -619,6 +638,11 @@ class CANHostComputer:
     def handle_heartbeat_timeout(self):
         """处理心跳超时"""
         self.heartbeat_status_var.set("停止")
+        
+        # 更新表格中的心跳状态
+        current_time = datetime.now().strftime("%H:%M:%S")
+        self.update_table_item('0x351', '心跳状态', str(self.heartbeat_count), '', '停止', current_time)
+        
         messagebox.showwarning("心跳超时", "BMS心跳终止 - 3秒未收到0x351报文")
         self.log_message("警告: BMS心跳终止，3秒未收到0x351报文")
         # 注意：这里不自动断开连接，只是提示心跳停止
@@ -790,8 +814,8 @@ class CANHostComputer:
         table_frame = ttk.Frame(parent)
         table_frame.pack(fill="x")
         
-        # 创建Treeview表格 - 添加CAN ID列
-        columns = ('CAN ID', '参数', '数值', '单位', '状态')
+        # 创建Treeview表格 - 添加刷新时间列
+        columns = ('CAN ID', '参数', '数值', '单位', '状态', '刷新时间')
         self.data_tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=8)
         
         # 设置列标题
@@ -808,6 +832,8 @@ class CANHostComputer:
                 self.data_tree.column(col, width=60, anchor='center')
             elif col == '状态':
                 self.data_tree.column(col, width=80, anchor='center')
+            elif col == '刷新时间':
+                self.data_tree.column(col, width=120, anchor='center')
         
         # 添加滚动条
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.data_tree.yview)
@@ -826,69 +852,96 @@ class CANHostComputer:
         for item in self.data_tree.get_children():
             self.data_tree.delete(item)
         
-        # 添加0x351数据项
-        self.data_tree.insert('', 'end', values=('0x351', '充电电压限制', '--', 'V', '等待'))
-        self.data_tree.insert('', 'end', values=('0x351', '最大充电电流', '--', 'A', '等待'))
-        self.data_tree.insert('', 'end', values=('0x351', '最大放电电流', '--', 'A', '等待'))
-        self.data_tree.insert('', 'end', values=('0x351', '放电电压', '--', 'V', '等待'))
+        # 添加0x351数据项（包括心跳状态）
+        self.data_tree.insert('', 'end', values=('0x351', '心跳状态', '0', '', '停止', '--'))
+        self.data_tree.insert('', 'end', values=('0x351', '充电电压限制', '--', 'V', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x351', '最大充电电流', '--', 'A', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x351', '最大放电电流', '--', 'A', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x351', '放电电压', '--', 'V', '等待', '--'))
         
         # 添加0x355数据项
-        self.data_tree.insert('', 'end', values=('0x355', 'SOC值', '--', '%', '等待'))
-        self.data_tree.insert('', 'end', values=('0x355', 'SOH值', '--', '%', '等待'))
-        self.data_tree.insert('', 'end', values=('0x355', '高精度SOC', '--', '%', '等待'))
+        self.data_tree.insert('', 'end', values=('0x355', 'SOC值', '--', '%', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x355', 'SOH值', '--', '%', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x355', '高精度SOC', '--', '%', '等待', '--'))
         
         # 添加0x356数据项
-        self.data_tree.insert('', 'end', values=('0x356', '电池电压', '--', 'V', '等待'))
-        self.data_tree.insert('', 'end', values=('0x356', '电池电流', '--', 'A', '等待'))
-        self.data_tree.insert('', 'end', values=('0x356', '电池温度', '--', '°C', '等待'))
+        self.data_tree.insert('', 'end', values=('0x356', '电池电压', '--', 'V', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x356', '电池电流', '--', 'A', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x356', '电池温度', '--', '°C', '等待', '--'))
         
-        # 添加0x35A数据项（只包含警告信息）
-        self.data_tree.insert('', 'end', values=('0x35A', '电池高压警告', '--', '', '等待'))
-        self.data_tree.insert('', 'end', values=('0x35A', '电池低压警告', '--', '', '等待'))
-        self.data_tree.insert('', 'end', values=('0x35A', '电池高温警告', '--', '', '等待'))
-        self.data_tree.insert('', 'end', values=('0x35A', '电池低温警告', '--', '', '等待'))
-        self.data_tree.insert('', 'end', values=('0x35A', '电池过流警告', '--', '', '等待'))
-        self.data_tree.insert('', 'end', values=('0x35A', 'BMS内部警告', '--', '', '等待'))
-        self.data_tree.insert('', 'end', values=('0x35A', '电池不平衡警告', '--', '', '等待'))
+        # 添加0x35A数据项（包含Alarm和Warning信息）
+        # Alarm信息
+        self.data_tree.insert('', 'end', values=('0x35A', '电池高压报警', '--', '', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x35A', '电池低压报警', '--', '', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x35A', '电池高温报警', '--', '', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x35A', '电池低温报警', '--', '', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x35A', '电池过流报警', '--', '', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x35A', 'BMS内部报警', '--', '', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x35A', '电池不平衡报警', '--', '', '等待', '--'))
+        
+        # Warning信息
+        self.data_tree.insert('', 'end', values=('0x35A', '电池高压警告', '--', '', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x35A', '电池低压警告', '--', '', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x35A', '电池高温警告', '--', '', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x35A', '电池低温警告', '--', '', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x35A', '电池过流警告', '--', '', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x35A', 'BMS内部警告', '--', '', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x35A', '电池不平衡警告', '--', '', '等待', '--'))
+        self.data_tree.insert('', 'end', values=('0x35A', '系统状态', '--', '', '等待', '--'))
     
     def update_table_data(self, can_id, parsed_data):
         """更新表格数据"""
+        current_time = datetime.now().strftime("%H:%M:%S")
+        
         if can_id == 0x351:
             # 更新0x351数据
-            self.update_table_item('0x351', '充电电压限制', f"{parsed_data.get('charge_voltage_limit', 0):.1f}", 'V', '正常')
-            self.update_table_item('0x351', '最大充电电流', f"{parsed_data.get('max_charge_current', 0):.1f}", 'A', '正常')
-            self.update_table_item('0x351', '最大放电电流', f"{parsed_data.get('max_discharge_current', 0):.1f}", 'A', '正常')
-            self.update_table_item('0x351', '放电电压', f"{parsed_data.get('discharge_voltage', 0):.1f}", 'V', '正常')
+            self.update_table_item('0x351', '充电电压限制', f"{parsed_data.get('charge_voltage_limit', 0):.1f}", 'V', '正常', current_time)
+            self.update_table_item('0x351', '最大充电电流', f"{parsed_data.get('max_charge_current', 0):.1f}", 'A', '正常', current_time)
+            self.update_table_item('0x351', '最大放电电流', f"{parsed_data.get('max_discharge_current', 0):.1f}", 'A', '正常', current_time)
+            self.update_table_item('0x351', '放电电压', f"{parsed_data.get('discharge_voltage', 0):.1f}", 'V', '正常', current_time)
             
         elif can_id == 0x355:
             # 更新0x355数据
-            self.update_table_item('0x355', 'SOC值', f"{parsed_data.get('soc_value', 0)}", '%', '正常')
-            self.update_table_item('0x355', 'SOH值', f"{parsed_data.get('soh_value', 0)}", '%', '正常')
-            self.update_table_item('0x355', '高精度SOC', f"{parsed_data.get('high_res_soc', 0):.2f}", '%', '正常')
+            self.update_table_item('0x355', 'SOC值', f"{parsed_data.get('soc_value', 0)}", '%', '正常', current_time)
+            self.update_table_item('0x355', 'SOH值', f"{parsed_data.get('soh_value', 0)}", '%', '正常', current_time)
+            self.update_table_item('0x355', '高精度SOC', f"{parsed_data.get('high_res_soc', 0):.2f}", '%', '正常', current_time)
             
         elif can_id == 0x356:
             # 更新0x356数据
-            self.update_table_item('0x356', '电池电压', f"{parsed_data.get('battery_voltage', 0):.2f}", 'V', '正常')
-            self.update_table_item('0x356', '电池电流', f"{parsed_data.get('battery_current', 0):.1f}", 'A', '正常')
-            self.update_table_item('0x356', '电池温度', f"{parsed_data.get('battery_temperature', 0):.1f}", '°C', '正常')
+            self.update_table_item('0x356', '电池电压', f"{parsed_data.get('battery_voltage', 0):.2f}", 'V', '正常', current_time)
+            self.update_table_item('0x356', '电池电流', f"{parsed_data.get('battery_current', 0):.1f}", 'A', '正常', current_time)
+            self.update_table_item('0x356', '电池温度', f"{parsed_data.get('battery_temperature', 0):.1f}", '°C', '正常', current_time)
             
         elif can_id == 0x35A:
-            # 更新0x35A警告状态（移除系统状态）
+            # 更新0x35A报警和警告状态
+            alarms = parsed_data.get('alarms', {})
             warnings = parsed_data.get('warnings', {})
-            self.update_table_item('0x35A', '电池高压警告', '是' if warnings.get('battery_high_voltage', False) else '否', '', '正常')
-            self.update_table_item('0x35A', '电池低压警告', '是' if warnings.get('battery_low_voltage', False) else '否', '', '正常')
-            self.update_table_item('0x35A', '电池高温警告', '是' if warnings.get('battery_high_temp', False) else '否', '', '正常')
-            self.update_table_item('0x35A', '电池低温警告', '是' if warnings.get('battery_low_temp', False) else '否', '', '正常')
-            self.update_table_item('0x35A', '电池过流警告', '是' if warnings.get('battery_high_current', False) else '否', '', '正常')
-            self.update_table_item('0x35A', 'BMS内部警告', '是' if warnings.get('bms_internal', False) else '否', '', '正常')
-            self.update_table_item('0x35A', '电池不平衡警告', '是' if warnings.get('cell_imbalance', False) else '否', '', '正常')
+            
+            # 更新Alarm信息
+            self.update_table_item('0x35A', '电池高压报警', '是' if alarms.get('battery_high_voltage_alarm', False) else '否', '', '正常', current_time)
+            self.update_table_item('0x35A', '电池低压报警', '是' if alarms.get('battery_low_voltage_alarm', False) else '否', '', '正常', current_time)
+            self.update_table_item('0x35A', '电池高温报警', '是' if alarms.get('battery_high_temp_alarm', False) else '否', '', '正常', current_time)
+            self.update_table_item('0x35A', '电池低温报警', '是' if alarms.get('battery_low_temp_alarm', False) else '否', '', '正常', current_time)
+            self.update_table_item('0x35A', '电池过流报警', '是' if alarms.get('battery_high_current_alarm', False) else '否', '', '正常', current_time)
+            self.update_table_item('0x35A', 'BMS内部报警', '是' if alarms.get('bms_internal_alarm', False) else '否', '', '正常', current_time)
+            self.update_table_item('0x35A', '电池不平衡报警', '是' if alarms.get('cell_imbalance_alarm', False) else '否', '', '正常', current_time)
+            
+            # 更新Warning信息
+            self.update_table_item('0x35A', '电池高压警告', '是' if warnings.get('battery_high_voltage', False) else '否', '', '正常', current_time)
+            self.update_table_item('0x35A', '电池低压警告', '是' if warnings.get('battery_low_voltage', False) else '否', '', '正常', current_time)
+            self.update_table_item('0x35A', '电池高温警告', '是' if warnings.get('battery_high_temp', False) else '否', '', '正常', current_time)
+            self.update_table_item('0x35A', '电池低温警告', '是' if warnings.get('battery_low_temp', False) else '否', '', '正常', current_time)
+            self.update_table_item('0x35A', '电池过流警告', '是' if warnings.get('battery_high_current', False) else '否', '', '正常', current_time)
+            self.update_table_item('0x35A', 'BMS内部警告', '是' if warnings.get('bms_internal', False) else '否', '', '正常', current_time)
+            self.update_table_item('0x35A', '电池不平衡警告', '是' if warnings.get('cell_imbalance', False) else '否', '', '正常', current_time)
+            self.update_table_item('0x35A', '系统状态', '在线' if warnings.get('system_online', False) else '离线', '', '正常', current_time)
     
-    def update_table_item(self, can_id, parameter, value, unit, status):
+    def update_table_item(self, can_id, parameter, value, unit, status, update_time):
         """更新表格中的单个项目"""
         for item in self.data_tree.get_children():
             values = self.data_tree.item(item)['values']
             if values[0] == can_id and values[1] == parameter:
-                self.data_tree.item(item, values=(can_id, parameter, value, unit, status))
+                self.data_tree.item(item, values=(can_id, parameter, value, unit, status, update_time))
                 break
 
 def main():
