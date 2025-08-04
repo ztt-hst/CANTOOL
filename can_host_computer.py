@@ -160,7 +160,7 @@ class CANHostComputer:
     def __init__(self, root):
         self.root = root
         self.root.title("CAN协议上位机 - 创芯科技CANalyst-II")
-        self.root.geometry("1000x700")
+        self.root.geometry("1000x800")  # 增加窗口高度以容纳发送数据表格
         
         # CAN相关变量
         self.can_bus = None
@@ -174,6 +174,10 @@ class CANHostComputer:
         self.sent_count = 0
         self.received_count = 0
         self.heartbeat_count = 0  # 新增心跳计数器
+        
+        # 发送统计变量
+        self.sent_305_count = 0
+        self.sent_307_count = 0
         
         # 创建界面
         self.create_widgets()
@@ -317,7 +321,14 @@ class CANHostComputer:
         self.heartbeat_status_var = tk.StringVar(value="正常")
         ttk.Label(stats_inner, textvariable=self.heartbeat_status_var).grid(row=0, column=5, padx=5)
         
-        # 数据表格显示框架
+        # 发送数据显示框架
+        send_data_frame = ttk.LabelFrame(main_frame, text="发送数据", padding="10")
+        send_data_frame.pack(fill="x", pady=5)
+        
+        # 创建发送数据表格
+        self.create_send_data_table(send_data_frame)
+        
+        # 实时数据表格显示框架
         data_frame = ttk.LabelFrame(main_frame, text="实时数据", padding="10")
         data_frame.pack(fill="x", pady=5)
         
@@ -379,7 +390,7 @@ class CANHostComputer:
             self.connect_btn.config(state="disabled")
             self.disconnect_btn.config(state="normal")
             self.start_btn.config(state="normal")
-            self.receive_check.config(state="normal")  # 启用接收复选框
+            self.receive_check.config(state="normal")  # 确保复选框可用
             
             self.status_var.set("已连接")
             self.heartbeat_status_var.set("等待")  # 初始状态为等待
@@ -388,6 +399,10 @@ class CANHostComputer:
             # 重置表格中的心跳状态
             current_time = datetime.now().strftime("%H:%M:%S")
             self.update_table_item('0x351', '心跳状态', '0', '', '等待', current_time)
+            
+            # 重置发送数据表格状态
+            self.update_send_data_table(0x305, "停止发送", 0, current_time)
+            self.update_send_data_table(0x307, "停止发送", 0, current_time)
             
             self.log_message("CAN设备连接成功")
             
@@ -441,6 +456,10 @@ class CANHostComputer:
         current_time = datetime.now().strftime("%H:%M:%S")
         self.update_table_item('0x351', '心跳状态', '0', '', '停止', current_time)
         
+        # 重置发送数据表格状态
+        self.update_send_data_table(0x305, "停止发送", 0, current_time)
+        self.update_send_data_table(0x307, "停止发送", 0, current_time)
+        
         self.log_message("CAN设备已断开")
     
     def start_sending(self):
@@ -451,6 +470,15 @@ class CANHostComputer:
         self.is_running = True
         self.start_btn.config(state="disabled")
         self.stop_btn.config(state="normal")
+        
+        # 重置发送计数
+        self.sent_305_count = 0
+        self.sent_307_count = 0
+        
+        # 更新发送数据表格初始状态 - 改为"正在发送"
+        current_time = datetime.now().strftime("%H:%M:%S")
+        self.update_send_data_table(0x305, "正在发送", 0, current_time)
+        self.update_send_data_table(0x307, "正在发送", 0, current_time)
         
         # 启动发送线程
         self.send_thread = threading.Thread(target=self.send_messages, daemon=True)
@@ -463,6 +491,12 @@ class CANHostComputer:
         self.is_running = False
         self.start_btn.config(state="normal")
         self.stop_btn.config(state="disabled")
+        
+        # 更新发送数据表格停止状态 - 改为"已停止"
+        current_time = datetime.now().strftime("%H:%M:%S")
+        self.update_send_data_table(0x305, "已停止", self.sent_305_count, current_time)
+        self.update_send_data_table(0x307, "已停止", self.sent_307_count, current_time)
+        
         self.log_message("停止发送CAN报文")
         
     def send_messages(self):
@@ -473,14 +507,26 @@ class CANHostComputer:
                 msg_305_data = self.create_305_message()
                 self.can_bus.send(0x305, msg_305_data)
                 self.sent_count += 1
+                self.sent_305_count += 1
                 self.sent_count_var.set(str(self.sent_count))
+                
+                # 更新发送数据表格 - 保持"正在发送"状态
+                current_time = datetime.now().strftime("%H:%M:%S")
+                self.update_send_data_table(0x305, "正在发送", self.sent_305_count, current_time)
+                
                 self.log_message(f"发送: ID=0x305, 数据: {msg_305_data.hex()}")
                 
                 # 发送ID为0x307的报文
                 msg_307_data = self.create_307_message()
                 self.can_bus.send(0x307, msg_307_data)
                 self.sent_count += 1
+                self.sent_307_count += 1
                 self.sent_count_var.set(str(self.sent_count))
+                
+                # 更新发送数据表格 - 保持"正在发送"状态
+                current_time = datetime.now().strftime("%H:%M:%S")
+                self.update_send_data_table(0x307, "正在发送", self.sent_307_count, current_time)
+                
                 self.log_message(f"发送: ID=0x307, 数据: {msg_307_data.hex()}")
                 
                 time.sleep(1)  # 每秒发送一次
@@ -763,22 +809,53 @@ class CANHostComputer:
             self.stop_receiving()
 
     def start_receiving(self):
-        """开始接收"""
+        """启动接收CAN报文的线程"""
         if not self.is_connected:
+            self.log_message("请先连接CAN总线。", color="orange")
+            self.receive_check.config(state="disabled")
             return
-            
-        self.is_receiving = True
-        self.log_message("开始接收CAN报文")
         
-        # 启动心跳监控线程
-        self.heartbeat_monitor_thread = threading.Thread(target=self.monitor_heartbeat, daemon=True)
-        self.heartbeat_monitor_thread.start()
+        if self.is_receiving:
+            self.log_message("接收线程已在运行。", color="orange")
+            return
+        
+        self.is_receiving = True
+        
+        # 重置心跳状态
+        self.heartbeat_status_var.set("等待")
+        self.heartbeat_count = 0
+        self.last_heartbeat_time = None
+        
+        # 重置表格中的心跳状态
+        current_time = datetime.now().strftime("%H:%M:%S")
+        self.update_table_item('0x351', '心跳状态', '0', '', '等待', current_time)
+        
+        self.receive_thread = threading.Thread(target=self.monitor_heartbeat, daemon=True)
+        self.receive_thread.start()
+        self.log_message("已开启接收CAN报文。", color="green")
     
     def stop_receiving(self):
-        """停止接收"""
+        """停止接收CAN报文的线程"""
+        if not self.is_receiving:
+            self.log_message("接收线程未运行。", color="orange")
+            return
+        
         self.is_receiving = False
-        self.log_message("停止接收CAN报文")
-    
+        # Wait for the thread to finish (optional, but good practice for clean shutdown)
+        if self.receive_thread and self.receive_thread.is_alive():
+            self.receive_thread.join(timeout=1) # Give it a second to finish
+        
+        # 重置心跳状态
+        self.heartbeat_status_var.set("停止")
+        self.heartbeat_count = 0
+        self.last_heartbeat_time = None
+        
+        # 重置表格中的心跳状态
+        current_time = datetime.now().strftime("%H:%M:%S")
+        self.update_table_item('0x351', '心跳状态', '0', '', '停止', current_time)
+        
+        self.log_message("停止接收CAN报文。", color="green")
+
     def monitor_receive(self):
         """接收报文的独立线程函数"""
         self.log_message("接收报文线程已启动")
@@ -942,6 +1019,69 @@ class CANHostComputer:
             values = self.data_tree.item(item)['values']
             if values[0] == can_id and values[1] == parameter:
                 self.data_tree.item(item, values=(can_id, parameter, value, unit, status, update_time))
+                break
+
+    def create_send_data_table(self, parent):
+        """创建发送数据表格"""
+        # 创建表格框架
+        table_frame = ttk.Frame(parent)
+        table_frame.pack(fill="x")
+        
+        # 创建Treeview表格 - 去掉单位列
+        columns = ('CAN ID', '发送状态', '发送次数', '状态', '发送时间')
+        self.send_data_tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=4)
+        
+        # 设置列标题
+        for col in columns:
+            self.send_data_tree.heading(col, text=col)
+            # 调整列宽
+            if col == 'CAN ID':
+                self.send_data_tree.column(col, width=80, anchor='center')
+            elif col == '发送状态':
+                self.send_data_tree.column(col, width=150, anchor='w')
+            elif col == '发送次数':
+                self.send_data_tree.column(col, width=100, anchor='center')
+            elif col == '状态':
+                self.send_data_tree.column(col, width=80, anchor='center')
+            elif col == '发送时间':
+                self.send_data_tree.column(col, width=120, anchor='center')
+        
+        # 添加滚动条
+        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.send_data_tree.yview)
+        self.send_data_tree.configure(yscrollcommand=scrollbar.set)
+        
+        # 布局
+        self.send_data_tree.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # 初始化发送数据表格
+        self.initialize_send_data_table()
+    
+    def initialize_send_data_table(self):
+        """初始化发送数据表格"""
+        # 清空现有数据
+        for item in self.send_data_tree.get_children():
+            self.send_data_tree.delete(item)
+        
+        # 添加0x305数据项 - 初始状态为"停止发送"
+        self.send_data_tree.insert('', 'end', values=('0x305', '停止发送', '0', '停止', '--'))
+        
+        # 添加0x307数据项 - 初始状态为"停止发送"
+        self.send_data_tree.insert('', 'end', values=('0x307', '停止发送', '0', '停止', '--'))
+    
+    def update_send_data_table(self, can_id, status, count, send_time):
+        """更新发送数据表格"""
+        if can_id == 0x305:
+            self.update_send_table_item('0x305', status, str(count), '正常', send_time)
+        elif can_id == 0x307:
+            self.update_send_table_item('0x307', status, str(count), '正常', send_time)
+    
+    def update_send_table_item(self, can_id, send_status, count, status, send_time):
+        """更新发送表格中的单个项目"""
+        for item in self.send_data_tree.get_children():
+            values = self.send_data_tree.item(item)['values']
+            if values[0] == can_id:
+                self.send_data_tree.item(item, values=(can_id, send_status, count, status, send_time))
                 break
 
 def main():
