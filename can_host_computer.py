@@ -9,6 +9,8 @@ import ctypes
 from ctypes import *
 from can_protocol_config import *  # 导入配置文件
 from language_manager import LanguageManager  # 导入语言管理器
+import os
+import sys
 
 # 创芯科技CAN API常量
 VCI_USBCAN2 = 4
@@ -166,6 +168,9 @@ class CANHostComputer:
         
         self.root.title(self.lang_manager.get_text('window_title'))
         
+        # 设置窗口图标
+        self.set_window_icon()
+        
         # 设置窗口初始大小和最小尺寸
         self.root.geometry("1200x800")
         self.root.minsize(1000, 700)
@@ -174,14 +179,14 @@ class CANHostComputer:
         self.can_bus = None
         self.is_connected = False
         self.is_running = False
-        self.is_receiving = False  # 新增接收状态
+        self.is_receiving = False
         self.last_heartbeat_time = None
         self.heartbeat_monitor_thread = None
         
         # 统计变量
         self.sent_count = 0
         self.received_count = 0
-        self.heartbeat_count = 0  # 新增心跳计数器
+        self.heartbeat_count = 0
         
         # 发送统计变量
         self.sent_305_count = 0
@@ -189,8 +194,46 @@ class CANHostComputer:
         
         # 创建界面
         self.create_widgets()
+    
+    def set_window_icon(self):
+        """设置窗口图标"""
+        import os
+        import sys
         
+        # 获取程序运行路径
+        if getattr(sys, 'frozen', False):
+            # 打包后的路径
+            application_path = sys._MEIPASS
+        else:
+            # 开发环境路径
+            application_path = os.path.dirname(os.path.abspath(__file__))
+        
+        # 尝试多个可能的图标路径
+        icon_paths = [
+            os.path.join(application_path, 'BQC.ico'),
+            os.path.join(application_path, 'icons', 'BQC.ico'),
+            'BQC.ico',
+            './BQC.ico',
+            './icons/BQC.ico'
+        ]
+        
+        icon_loaded = False
+        for icon_path in icon_paths:
+            if os.path.exists(icon_path):
+                try:
+                    self.root.iconbitmap(icon_path)
+                    icon_loaded = True
+                    print(f"成功设置窗口图标: {icon_path}")
+                    break
+                except Exception as e:
+                    print(f"设置图标失败 {icon_path}: {str(e)}")
+                    continue
+        
+        if not icon_loaded:
+            print("警告: 未找到有效的图标文件")
+    
     def create_widgets(self):
+        """创建界面组件"""
         # 主框架
         main_frame = ttk.Frame(self.root)
         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
@@ -215,19 +258,19 @@ class CANHostComputer:
         row1 = ttk.Frame(connection_frame)
         row1.pack(fill="x", pady=2)
         
-        ttk.Label(row1, text=self.lang_manager.get_text('device_type')).pack(side="left", padx=5)
+        ttk.Label(row1, text=self.lang_manager.get_text('device_type') + ":").pack(side="left", padx=5)
         self.device_type_var = tk.StringVar(value="VCI_USBCAN2")
         device_type_combo = ttk.Combobox(row1, textvariable=self.device_type_var, 
                                        values=["VCI_USBCAN2"], width=15, state="readonly")
         device_type_combo.pack(side="left", padx=5)
         
-        ttk.Label(row1, text=self.lang_manager.get_text('device_index')).pack(side="left", padx=5)
+        ttk.Label(row1, text=self.lang_manager.get_text('device_index') + ":").pack(side="left", padx=5)
         self.device_index_var = tk.StringVar(value="0")
         device_index_combo = ttk.Combobox(row1, textvariable=self.device_index_var, 
                                         values=["0", "1"], width=5)
         device_index_combo.pack(side="left", padx=5)
         
-        ttk.Label(row1, text=self.lang_manager.get_text('can_channel')).pack(side="left", padx=5)
+        ttk.Label(row1, text=self.lang_manager.get_text('can_channel') + ":").pack(side="left", padx=5)
         self.can_index_var = tk.StringVar(value="0")
         can_index_combo = ttk.Combobox(row1, textvariable=self.can_index_var, 
                                       values=["0", "1"], width=5)
@@ -237,7 +280,7 @@ class CANHostComputer:
         row2 = ttk.Frame(connection_frame)
         row2.pack(fill="x", pady=2)
         
-        ttk.Label(row2, text=self.lang_manager.get_text('baudrate')).pack(side="left", padx=5)
+        ttk.Label(row2, text=self.lang_manager.get_text('baudrate') + ":").pack(side="left", padx=5)
         self.baudrate_var = tk.StringVar(value="500000")
         baudrate_combo = ttk.Combobox(row2, textvariable=self.baudrate_var,
                                      values=["250000", "500000"], width=10)
@@ -262,7 +305,7 @@ class CANHostComputer:
         send_frame = ttk.Frame(btn_frame)
         send_frame.pack(side="left", padx=10)
         
-        ttk.Label(send_frame, text=self.lang_manager.get_text('send_control')).pack(side="left")
+        ttk.Label(send_frame, text=self.lang_manager.get_text('send_control') + ":").pack(side="left")
         self.start_btn = ttk.Button(send_frame, text=self.lang_manager.get_text('start_sending'), command=self.start_sending, state="disabled")
         self.start_btn.pack(side="left", padx=5)
         
@@ -273,7 +316,7 @@ class CANHostComputer:
         receive_frame = ttk.Frame(btn_frame)
         receive_frame.pack(side="left", padx=10)
         
-        ttk.Label(receive_frame, text=self.lang_manager.get_text('receive_control')).pack(side="left")
+        ttk.Label(receive_frame, text=self.lang_manager.get_text('receive_control') + ":").pack(side="left")
         self.receive_var = tk.BooleanVar(value=False)
         self.receive_check = ttk.Checkbutton(receive_frame, text=self.lang_manager.get_text('enable_receiving'), 
                                            variable=self.receive_var, 
@@ -294,17 +337,17 @@ class CANHostComputer:
         stats_inner.pack(fill="x")
         
         # 发送统计
-        ttk.Label(stats_inner, text=self.lang_manager.get_text('sent')).grid(row=0, column=0, sticky="w", padx=5)
+        ttk.Label(stats_inner, text=self.lang_manager.get_text('sent') + ":").grid(row=0, column=0, sticky="w", padx=5)
         self.sent_count_var = tk.StringVar(value="0")
         ttk.Label(stats_inner, textvariable=self.sent_count_var).grid(row=0, column=1, padx=5)
         
         # 接收统计
-        ttk.Label(stats_inner, text=self.lang_manager.get_text('received')).grid(row=0, column=2, sticky="w", padx=5)
+        ttk.Label(stats_inner, text=self.lang_manager.get_text('received') + ":").grid(row=0, column=2, sticky="w", padx=5)
         self.received_count_var = tk.StringVar(value="0")
         ttk.Label(stats_inner, textvariable=self.received_count_var).grid(row=0, column=3, padx=5)
         
         # 心跳状态
-        ttk.Label(stats_inner, text=self.lang_manager.get_text('heartbeat_status')).grid(row=0, column=4, sticky="w", padx=5)
+        ttk.Label(stats_inner, text=self.lang_manager.get_text('heartbeat_status') + ":").grid(row=0, column=4, sticky="w", padx=5)
         self.heartbeat_status_var = tk.StringVar(value=self.lang_manager.get_text('waiting'))
         ttk.Label(stats_inner, textvariable=self.heartbeat_status_var).grid(row=0, column=5, padx=5)
         
@@ -345,8 +388,8 @@ class CANHostComputer:
         clear_btn = ttk.Button(log_btn_frame, text=self.lang_manager.get_text('clear_log'), command=self.clear_log)
         clear_btn.pack(side="left")
         
-        # 将保存日志按钮改为勾选框 - 默认勾选
-        self.auto_save_var = tk.BooleanVar(value=True)  # 改为True，默认勾选
+        # 将保存日志按钮改为勾选框 - 默认不勾选
+        self.auto_save_var = tk.BooleanVar(value=False)  # 改为False，默认不勾选
         self.auto_save_check = ttk.Checkbutton(log_btn_frame, text=self.lang_manager.get_text('auto_save_log'), 
                                              variable=self.auto_save_var, 
                                              command=self.toggle_auto_save)
@@ -363,8 +406,8 @@ class CANHostComputer:
         self.log_file = None
         self.log_filename = None
         
-        # 程序启动时自动开始保存日志
-        self.root.after(100, self.start_auto_save_on_startup)
+        # 移除自动开始保存日志的调用
+        # self.start_auto_save_on_startup()  # 注释掉这行
     
     def toggle_auto_save(self):
         """切换自动保存日志功能"""
@@ -374,25 +417,40 @@ class CANHostComputer:
             self.stop_auto_save()
     
     def start_auto_save(self):
-        """开始自动保存日志"""
+        """开始自动保存日志 - 让用户选择保存路径和文件名"""
         try:
-            # 生成日志文件名
-            self.log_filename = f"can_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+            # 弹出文件选择对话框
+            filename = filedialog.asksaveasfilename(
+                title=self.lang_manager.get_text('select_log_file'),
+                defaultextension=".txt",
+                filetypes=[
+                    ("文本文件", "*.txt"),
+                    ("日志文件", "*.log"),
+                    ("所有文件", "*.*")
+                ],
+                initialfile=f"can_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"  # 修正参数名
+            )
             
-            # 打开日志文件
-            self.log_file = open(self.log_filename, 'w', encoding='utf-8')
-            
-            # 写入日志文件头部信息
-            header = f"CAN协议上位机日志文件\n"
-            header += f"创建时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-            header += f"设备类型: 创芯科技CANalyst-II\n"
-            header += "=" * 50 + "\n\n"
-            
-            self.log_file.write(header)
-            self.log_file.flush()  # 立即写入文件
-            
-            self.log_message(f"自动保存日志已开启，日志文件: {self.log_filename}")
-            
+            if filename:  # 用户选择了文件
+                # 打开日志文件
+                self.log_file = open(filename, 'w', encoding='utf-8')
+                self.log_filename = filename
+                
+                # 写入日志文件头部信息
+                header = f"CAN协议上位机日志文件\n"
+                header += f"创建时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                header += f"设备类型: 创芯科技CANalyst-II\n"
+                header += "=" * 50 + "\n\n"
+                
+                self.log_file.write(header)
+                self.log_file.flush()  # 立即写入文件
+                
+                self.log_message(f"自动保存日志已开启，日志文件: {self.log_filename}")
+                
+            else:
+                # 用户取消了文件选择，取消勾选
+                self.auto_save_var.set(False)
+                
         except Exception as e:
             messagebox.showerror("错误", f"无法创建日志文件: {str(e)}")
             self.auto_save_var.set(False)  # 取消勾选
@@ -1204,9 +1262,9 @@ class CANHostComputer:
                 break
 
     def start_auto_save_on_startup(self):
-        """程序启动时自动开始保存日志"""
-        if self.auto_save_var.get():
-            self.start_auto_save()
+        """程序启动时自动开始保存日志 - 现在不自动开始"""
+        # 移除自动开始保存的逻辑
+        pass
 
     def switch_language(self, language):
         """切换语言"""
@@ -1214,13 +1272,130 @@ class CANHostComputer:
             # 更新窗口标题
             self.root.title(self.lang_manager.get_text('window_title'))
             
-            # 重新创建界面
-            self.recreate_widgets()
+            # 只更新界面文本，不重新创建整个界面
+            self.update_ui_language()
+    
+    def update_ui_language(self):
+        """更新界面语言文本"""
+        # 保存当前状态
+        current_state = self.save_current_state()
+        
+        # 更新连接设置框架
+        self.update_connection_frame_text()
+        
+        # 更新控制框架
+        self.update_control_frame_text()
+        
+        # 更新统计信息框架
+        self.update_statistics_frame_text()
+        
+        # 更新发送数据框架
+        self.update_send_data_frame_text()
+        
+        # 更新实时数据框架
+        self.update_real_time_data_frame_text()
+        
+        # 更新日志框架
+        self.update_log_frame_text()
+        
+        # 恢复状态
+        self.restore_state(current_state)
+    
+    def update_connection_frame_text(self):
+        """更新连接设置框架文本"""
+        # 更新框架标题
+        for widget in self.root.winfo_children():
+            if isinstance(widget, ttk.Frame):
+                for child in widget.winfo_children():
+                    if isinstance(child, ttk.LabelFrame):
+                        if "连接设置" in child.cget("text") or "Connection Settings" in child.cget("text"):
+                            child.configure(text=self.lang_manager.get_text('connection_settings'))
+                            break
+        
+        # 更新按钮文本
+        if hasattr(self, 'connect_btn'):
+            self.connect_btn.configure(text=self.lang_manager.get_text('connect'))
+        if hasattr(self, 'disconnect_btn'):
+            self.disconnect_btn.configure(text=self.lang_manager.get_text('disconnect'))
+    
+    def update_control_frame_text(self):
+        """更新控制框架文本"""
+        # 更新框架标题
+        for widget in self.root.winfo_children():
+            if isinstance(widget, ttk.Frame):
+                for child in widget.winfo_children():
+                    if isinstance(child, ttk.LabelFrame):
+                        if "控制" in child.cget("text") or "Control" in child.cget("text"):
+                            child.configure(text=self.lang_manager.get_text('control'))
+                            break
+        
+        # 更新按钮文本
+        if hasattr(self, 'start_btn'):
+            self.start_btn.configure(text=self.lang_manager.get_text('start_sending'))
+        if hasattr(self, 'stop_btn'):
+            self.stop_btn.configure(text=self.lang_manager.get_text('stop_sending'))
+        if hasattr(self, 'receive_check'):
+            self.receive_check.configure(text=self.lang_manager.get_text('enable_receiving'))
+    
+    def update_statistics_frame_text(self):
+        """更新统计信息框架文本"""
+        # 更新框架标题
+        for widget in self.root.winfo_children():
+            if isinstance(widget, ttk.Frame):
+                for child in widget.winfo_children():
+                    if isinstance(child, ttk.LabelFrame):
+                        if "统计信息" in child.cget("text") or "Statistics" in child.cget("text"):
+                            child.configure(text=self.lang_manager.get_text('statistics'))
+                            break
+    
+    def update_send_data_frame_text(self):
+        """更新发送数据框架文本"""
+        # 更新框架标题
+        for widget in self.root.winfo_children():
+            if isinstance(widget, ttk.Frame):
+                for child in widget.winfo_children():
+                    if isinstance(child, ttk.LabelFrame):
+                        if "发送数据" in child.cget("text") or "Send Data" in child.cget("text"):
+                            child.configure(text=self.lang_manager.get_text('send_data'))
+                            break
+    
+    def update_real_time_data_frame_text(self):
+        """更新实时数据框架文本"""
+        # 更新框架标题
+        for widget in self.root.winfo_children():
+            if isinstance(widget, ttk.Frame):
+                for child in widget.winfo_children():
+                    if isinstance(child, ttk.LabelFrame):
+                        if "实时数据" in child.cget("text") or "Real-time Data" in child.cget("text"):
+                            child.configure(text=self.lang_manager.get_text('real_time_data'))
+                            break
+    
+    def update_log_frame_text(self):
+        """更新日志框架文本"""
+        # 更新框架标题
+        for widget in self.root.winfo_children():
+            if isinstance(widget, ttk.Frame):
+                for child in widget.winfo_children():
+                    if isinstance(child, ttk.LabelFrame):
+                        if "通信日志" in child.cget("text") or "Communication Log" in child.cget("text"):
+                            child.configure(text=self.lang_manager.get_text('communication_log'))
+                            break
+        
+        # 更新按钮文本
+        if hasattr(self, 'auto_save_check'):
+            self.auto_save_check.configure(text=self.lang_manager.get_text('auto_save_log'))
     
     def recreate_widgets(self):
         """重新创建界面（语言切换时调用）"""
         # 保存当前状态
         current_state = self.save_current_state()
+        
+        # 保存日志文件状态
+        log_file_state = {
+            'log_file': self.log_file,
+            'log_filename': self.log_filename,
+            'auto_save_enabled': self.auto_save_var.get() if hasattr(self, 'auto_save_var') else False
+        }
         
         # 清空现有界面
         for widget in self.root.winfo_children():
@@ -1231,6 +1406,13 @@ class CANHostComputer:
         
         # 恢复状态
         self.restore_state(current_state)
+        
+        # 恢复日志文件状态
+        if log_file_state['auto_save_enabled'] and not hasattr(self, '_auto_save_initialized'):
+            self.auto_save_var.set(True)
+            # 不重新创建日志文件，继续使用现有的
+            self.log_file = log_file_state['log_file']
+            self.log_filename = log_file_state['log_filename']
     
     def save_current_state(self):
         """保存当前状态"""

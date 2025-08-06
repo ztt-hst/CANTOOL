@@ -85,5 +85,10 @@
   "waiting_status": "Waiting",
   "normal_status": "Normal",
   "yes": "Yes",
-  "no": "No"
+  "no": "No",
+  "select_log_file": "Select Log File",
+  "log_file_types": "Log File Types",
+  "text_files": "Text Files",
+  "log_files": "Log Files",
+  "all_files": "All Files"
 } 

@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 
 block_cipher = None
 
@@ -6,6 +7,11 @@ block_cipher = None
 datas = [
     ('ControlCAN.dll', '.'),
     ('can_protocol_config.py', '.'),
+    ('language_manager.py', '.'),
+    ('BQC.ico', '.'),
+    # 添加语言文件
+    ('languages/chinese.json', 'languages'),
+    ('languages/english.json', 'languages'),
 ]
 
 # 隐藏导入
@@ -22,6 +28,7 @@ hiddenimports = [
     'json',
     'struct',
     'can_protocol_config',
+    'language_manager',
 ]
 
 # 分析
@@ -65,5 +72,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='icon.ico' if os.path.exists('icon.ico') else None,
+    icon='BQC.ico' if os.path.exists('BQC.ico') else None,  # 修正图标路径
 ) 
