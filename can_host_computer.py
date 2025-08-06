@@ -9,10 +9,25 @@ import ctypes
 from ctypes import *
 from can_protocol_config import *  # 导入配置文件
 from lang_config import LANGUAGES
+import sys
+import os
 
 # 创芯科技CAN API常量
 VCI_USBCAN2 = 4
 STATUS_OK = 1
+
+def get_resource_path(filename):
+    """
+    获取资源文件路径，兼容开发环境和PyInstaller打包后的环境
+    """
+    if getattr(sys, 'frozen', False):
+        # PyInstaller打包后的exe
+        base_path = sys._MEIPASS
+    else:
+        # 源码运行
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, filename)
+
 
 class VCI_INIT_CONFIG(Structure):  
     _fields_ = [("AccCode", c_uint),
@@ -165,6 +180,8 @@ class CANHostComputer:
         # 设置窗口初始大小和最小尺寸
         self.root.geometry("1200x800")  # 增加初始窗口大小
         self.root.minsize(1000, 700)   # 设置最小尺寸
+        # 设置窗口图标
+        self.set_window_icon()
         
         # CAN相关变量
         self.can_bus = None
@@ -189,7 +206,18 @@ class CANHostComputer:
         
         # 创建界面
         self.create_widgets()
-        
+    def set_window_icon(self):
+        """设置窗口图标"""
+        try:
+            # 获取图标文件路径
+            icon_path = get_resource_path('BQC.ico')        
+            if os.path.exists(icon_path):
+                self.root.iconbitmap(icon_path)
+            else:
+                print(f"图标文件不存在: {icon_path}")
+        except Exception as e:
+            print(f"设置窗口图标失败: {e}")
+
     def create_widgets(self):
         # 主框架
         main_frame = ttk.Frame(self.root)
@@ -1379,8 +1407,7 @@ class CANHostComputer:
 
 def main():
     root = tk.Tk()
-    app = CANHostComputer(root)
-    
+    app = CANHostComputer(root) 
     # 设置窗口关闭事件处理
     def on_closing():
         if app.auto_save_var.get():

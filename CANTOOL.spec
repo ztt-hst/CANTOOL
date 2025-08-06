@@ -6,6 +6,7 @@ block_cipher = None
 datas = [
     ('ControlCAN.dll', '.'),
     ('can_protocol_config.py', '.'),
+    ('BQC.ico','.'),
 ]
 
 # 隐藏导入
