@@ -204,7 +204,7 @@
   ('json.scanner',
    'C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\lib\\json\\scanner.py',
    'PYMODULE'),
-  ('language_manager', 'D:\\can_tool\\language_manager.py', 'PYMODULE'),
+  ('lang_config', 'D:\\can_tool\\lang_config.py', 'PYMODULE'),
   ('logging',
    'C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\lib\\logging\\__init__.py',
    'PYMODULE'),

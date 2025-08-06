@@ -8,9 +8,7 @@ import struct
 import ctypes
 from ctypes import *
 from can_protocol_config import *  # 导入配置文件
-from language_manager import LanguageManager  # 导入语言管理器
-import os
-import sys
+from lang_config import LANGUAGES
 
 # 创芯科技CAN API常量
 VCI_USBCAN2 = 4
@@ -162,115 +160,72 @@ class CANalystCANBus:
 class CANHostComputer:
     def __init__(self, root):
         self.root = root
-        
-        # 初始化语言管理器
-        self.lang_manager = LanguageManager('chinese')
-        
-        self.root.title(self.lang_manager.get_text('window_title'))
-        
-        # 设置窗口图标
-        self.set_window_icon()
+        self.root.title("CAN协议上位机 - 创芯科技CANalyst-II")
         
         # 设置窗口初始大小和最小尺寸
-        self.root.geometry("1200x800")
-        self.root.minsize(1000, 700)
+        self.root.geometry("1200x800")  # 增加初始窗口大小
+        self.root.minsize(1000, 700)   # 设置最小尺寸
         
         # CAN相关变量
         self.can_bus = None
         self.is_connected = False
         self.is_running = False
-        self.is_receiving = False
+        self.is_receiving = False  # 新增接收状态
         self.last_heartbeat_time = None
         self.heartbeat_monitor_thread = None
         
         # 统计变量
         self.sent_count = 0
         self.received_count = 0
-        self.heartbeat_count = 0
+        self.heartbeat_count = 0  # 新增心跳计数器
         
         # 发送统计变量
         self.sent_305_count = 0
         self.sent_307_count = 0
         
+        # 语言设置
+        self.lang = 'zh' # 默认中文
+        self.lang_var = tk.StringVar(value=self.lang)
+        
         # 创建界面
         self.create_widgets()
-    
-    def set_window_icon(self):
-        """设置窗口图标"""
-        import os
-        import sys
         
-        # 获取程序运行路径
-        if getattr(sys, 'frozen', False):
-            # 打包后的路径
-            application_path = sys._MEIPASS
-        else:
-            # 开发环境路径
-            application_path = os.path.dirname(os.path.abspath(__file__))
-        
-        # 尝试多个可能的图标路径
-        icon_paths = [
-            os.path.join(application_path, 'BQC.ico'),
-            os.path.join(application_path, 'icons', 'BQC.ico'),
-            'BQC.ico',
-            './BQC.ico',
-            './icons/BQC.ico'
-        ]
-        
-        icon_loaded = False
-        for icon_path in icon_paths:
-            if os.path.exists(icon_path):
-                try:
-                    self.root.iconbitmap(icon_path)
-                    icon_loaded = True
-                    print(f"成功设置窗口图标: {icon_path}")
-                    break
-                except Exception as e:
-                    print(f"设置图标失败 {icon_path}: {str(e)}")
-                    continue
-        
-        if not icon_loaded:
-            print("警告: 未找到有效的图标文件")
-    
     def create_widgets(self):
-        """创建界面组件"""
         # 主框架
         main_frame = ttk.Frame(self.root)
         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
-        # 语言切换按钮 - 添加到顶部
-        lang_frame = ttk.Frame(main_frame)
-        lang_frame.pack(fill="x", pady=(0, 5))
-        
-        ttk.Label(lang_frame, text="Language/语言:").pack(side="left")
-        lang_var = tk.StringVar(value=self.lang_manager.get_current_language())
-        lang_combo = ttk.Combobox(lang_frame, textvariable=lang_var, 
-                                 values=self.lang_manager.get_available_languages(), 
-                                 state="readonly", width=10)
-        lang_combo.pack(side="left", padx=5)
-        lang_combo.bind('<<ComboboxSelected>>', lambda e: self.switch_language(lang_var.get()))
+        # 语言选择
+        lang_frame = ttk.Frame(self.root)
+        lang_frame.pack(fill="x", padx=10, pady=2)
+        ttk.Label(lang_frame, text=LANGUAGES[self.lang]['language']).pack(side="left")
+        self.lang_var = tk.StringVar(value=self.lang)
+        lang_combo = ttk.Combobox(lang_frame, textvariable=self.lang_var, values=['zh', 'en'], width=8, state="readonly")
+        lang_combo.pack(side="left")
+        lang_combo.bind("<<ComboboxSelected>>", self.on_language_change)
         
         # 连接设置框架
-        connection_frame = ttk.LabelFrame(main_frame, text=self.lang_manager.get_text('connection_settings'), padding="10")
+        self.connection_frame = ttk.LabelFrame(main_frame, text="连接设置", padding="10")
+        connection_frame = self.connection_frame
         connection_frame.pack(fill="x", pady=5)
         
         # 第一行：设备设置
         row1 = ttk.Frame(connection_frame)
         row1.pack(fill="x", pady=2)
         
-        ttk.Label(row1, text=self.lang_manager.get_text('device_type') + ":").pack(side="left", padx=5)
+        ttk.Label(row1, text="设备类型:").pack(side="left", padx=5)
         self.device_type_var = tk.StringVar(value="VCI_USBCAN2")
         device_type_combo = ttk.Combobox(row1, textvariable=self.device_type_var, 
                                        values=["VCI_USBCAN2"], width=15, state="readonly")
         device_type_combo.pack(side="left", padx=5)
         
-        ttk.Label(row1, text=self.lang_manager.get_text('device_index') + ":").pack(side="left", padx=5)
+        ttk.Label(row1, text="设备索引:").pack(side="left", padx=5)
         self.device_index_var = tk.StringVar(value="0")
         device_index_combo = ttk.Combobox(row1, textvariable=self.device_index_var, 
                                         values=["0", "1"], width=5)
         device_index_combo.pack(side="left", padx=5)
         
-        ttk.Label(row1, text=self.lang_manager.get_text('can_channel') + ":").pack(side="left", padx=5)
+        ttk.Label(row1, text="CAN通道:").pack(side="left", padx=5)
         self.can_index_var = tk.StringVar(value="0")
         can_index_combo = ttk.Combobox(row1, textvariable=self.can_index_var, 
                                       values=["0", "1"], width=5)
@@ -280,21 +235,22 @@ class CANHostComputer:
         row2 = ttk.Frame(connection_frame)
         row2.pack(fill="x", pady=2)
         
-        ttk.Label(row2, text=self.lang_manager.get_text('baudrate') + ":").pack(side="left", padx=5)
+        ttk.Label(row2, text="波特率:").pack(side="left", padx=5)
         self.baudrate_var = tk.StringVar(value="500000")
         baudrate_combo = ttk.Combobox(row2, textvariable=self.baudrate_var,
                                      values=["250000", "500000"], width=10)
         baudrate_combo.pack(side="left", padx=5)
         
         # 连接按钮
-        self.connect_btn = ttk.Button(row2, text=self.lang_manager.get_text('connect'), command=self.connect_can)
+        self.connect_btn = ttk.Button(row2, text="连接", command=self.connect_can)
         self.connect_btn.pack(side="left", padx=10)
         
-        self.disconnect_btn = ttk.Button(row2, text=self.lang_manager.get_text('disconnect'), command=self.disconnect_can, state="disabled")
+        self.disconnect_btn = ttk.Button(row2, text="断开", command=self.disconnect_can, state="disabled")
         self.disconnect_btn.pack(side="left", padx=5)
         
         # 控制框架
-        control_frame = ttk.LabelFrame(main_frame, text=self.lang_manager.get_text('control'), padding="10")
+        self.control_frame = ttk.LabelFrame(main_frame, text="控制", padding="10")
+        control_frame = self.control_frame
         control_frame.pack(fill="x", pady=5)
         
         # 控制按钮
@@ -305,51 +261,54 @@ class CANHostComputer:
         send_frame = ttk.Frame(btn_frame)
         send_frame.pack(side="left", padx=10)
         
-        ttk.Label(send_frame, text=self.lang_manager.get_text('send_control') + ":").pack(side="left")
-        self.start_btn = ttk.Button(send_frame, text=self.lang_manager.get_text('start_sending'), command=self.start_sending, state="disabled")
+        ttk.Label(send_frame, text="发送控制:").pack(side="left")
+        self.start_btn = ttk.Button(send_frame, text="启动发送", command=self.start_sending, state="disabled")
         self.start_btn.pack(side="left", padx=5)
         
-        self.stop_btn = ttk.Button(send_frame, text=self.lang_manager.get_text('stop_sending'), command=self.stop_sending, state="disabled")
+        self.stop_btn = ttk.Button(send_frame, text="停止发送", command=self.stop_sending, state="disabled")
         self.stop_btn.pack(side="left", padx=5)
         
         # 接收控制
         receive_frame = ttk.Frame(btn_frame)
         receive_frame.pack(side="left", padx=10)
         
-        ttk.Label(receive_frame, text=self.lang_manager.get_text('receive_control') + ":").pack(side="left")
+        ttk.Label(receive_frame, text="接收控制:").pack(side="left")
         self.receive_var = tk.BooleanVar(value=False)
-        self.receive_check = ttk.Checkbutton(receive_frame, text=self.lang_manager.get_text('enable_receiving'), 
+        self.receive_check = ttk.Checkbutton(receive_frame, text="开启接收", 
                                            variable=self.receive_var, 
                                            command=self.toggle_receive, 
                                            state="disabled")
         self.receive_check.pack(side="left", padx=5)
         
         # 状态显示
-        self.status_var = tk.StringVar(value=self.lang_manager.get_text('not_connected'))
+        self.status_var = tk.StringVar(value="未连接")
         status_label = ttk.Label(btn_frame, textvariable=self.status_var)
         status_label.pack(side="right", padx=5)
         
         # 统计信息框架
-        stats_frame = ttk.LabelFrame(main_frame, text=self.lang_manager.get_text('statistics'), padding="10")
+        self.stats_frame = ttk.LabelFrame(main_frame, text="统计信息", padding="10")
+        stats_frame = self.stats_frame
         stats_frame.pack(fill="x", pady=5)
         
         stats_inner = ttk.Frame(stats_frame)
         stats_inner.pack(fill="x")
         
         # 发送统计
-        ttk.Label(stats_inner, text=self.lang_manager.get_text('sent') + ":").grid(row=0, column=0, sticky="w", padx=5)
+        ttk.Label(stats_inner, text="发送:").grid(row=0, column=0, sticky="w", padx=5)
         self.sent_count_var = tk.StringVar(value="0")
         ttk.Label(stats_inner, textvariable=self.sent_count_var).grid(row=0, column=1, padx=5)
         
         # 接收统计
-        ttk.Label(stats_inner, text=self.lang_manager.get_text('received') + ":").grid(row=0, column=2, sticky="w", padx=5)
+        ttk.Label(stats_inner, text="接收:").grid(row=0, column=2, sticky="w", padx=5)
         self.received_count_var = tk.StringVar(value="0")
         ttk.Label(stats_inner, textvariable=self.received_count_var).grid(row=0, column=3, padx=5)
         
         # 心跳状态
-        ttk.Label(stats_inner, text=self.lang_manager.get_text('heartbeat_status') + ":").grid(row=0, column=4, sticky="w", padx=5)
-        self.heartbeat_status_var = tk.StringVar(value=self.lang_manager.get_text('waiting'))
-        ttk.Label(stats_inner, textvariable=self.heartbeat_status_var).grid(row=0, column=5, padx=5)
+        ttk.Label(stats_inner, text="心跳状态:").grid(row=0, column=4, sticky="w", padx=5)
+        lang = LANGUAGES[self.lang]
+        self.heartbeat_status_var = tk.StringVar(value=lang['normal'])
+        self.heartbeat_status_label = ttk.Label(stats_inner, textvariable=self.heartbeat_status_var)
+        self.heartbeat_status_label.grid(row=0, column=5, padx=5)
         
         # 创建左右分栏布局
         content_frame = ttk.Frame(main_frame)
@@ -360,14 +319,16 @@ class CANHostComputer:
         left_frame.pack(side="left", fill="both", expand=True, padx=(0, 5))
         
         # 发送数据显示框架
-        send_data_frame = ttk.LabelFrame(left_frame, text=self.lang_manager.get_text('send_data'), padding="10")
+        self.send_data_frame = ttk.LabelFrame(left_frame, text="发送数据", padding="10")
+        send_data_frame = self.send_data_frame
         send_data_frame.pack(fill="x", pady=5)
         
         # 创建发送数据表格
         self.create_send_data_table(send_data_frame)
         
         # 实时数据表格显示框架
-        data_frame = ttk.LabelFrame(left_frame, text=self.lang_manager.get_text('real_time_data'), padding="10")
+        self.data_frame = ttk.LabelFrame(left_frame, text="实时数据", padding="10")
+        data_frame = self.data_frame
         data_frame.pack(fill="both", expand=True, pady=5)
         
         # 创建表格
@@ -378,19 +339,20 @@ class CANHostComputer:
         right_frame.pack(side="right", fill="both", expand=True, padx=(5, 0))
         
         # 日志框架
-        log_frame = ttk.LabelFrame(right_frame, text=self.lang_manager.get_text('communication_log'), padding="10")
+        self.log_frame = ttk.LabelFrame(right_frame, text="通信日志", padding="10")
+        log_frame = self.log_frame
         log_frame.pack(fill="both", expand=True)
         
         # 日志控制按钮 - 移到日志文本框上方
         log_btn_frame = ttk.Frame(log_frame)
         log_btn_frame.pack(fill="x", pady=(0, 5))
         
-        clear_btn = ttk.Button(log_btn_frame, text=self.lang_manager.get_text('clear_log'), command=self.clear_log)
+        clear_btn = ttk.Button(log_btn_frame, text="清空日志", command=self.clear_log)
         clear_btn.pack(side="left")
         
         # 将保存日志按钮改为勾选框 - 默认不勾选
-        self.auto_save_var = tk.BooleanVar(value=False)  # 改为False，默认不勾选
-        self.auto_save_check = ttk.Checkbutton(log_btn_frame, text=self.lang_manager.get_text('auto_save_log'), 
+        self.auto_save_var = tk.BooleanVar(value=False)  # 默认不勾选
+        self.auto_save_check = ttk.Checkbutton(log_btn_frame, text="自动保存日志", 
                                              variable=self.auto_save_var, 
                                              command=self.toggle_auto_save)
         self.auto_save_check.pack(side="left", padx=5)
@@ -406,8 +368,8 @@ class CANHostComputer:
         self.log_file = None
         self.log_filename = None
         
-        # 移除自动开始保存日志的调用
-        # self.start_auto_save_on_startup()  # 注释掉这行
+        # 程序启动时自动开始保存日志
+        self.root.after(100, self.start_auto_save_on_startup)
     
     def toggle_auto_save(self):
         """切换自动保存日志功能"""
@@ -417,43 +379,37 @@ class CANHostComputer:
             self.stop_auto_save()
     
     def start_auto_save(self):
-        """开始自动保存日志 - 让用户选择保存路径和文件名"""
+        """开始自动保存日志"""
         try:
-            # 弹出文件选择对话框
+            # 弹出文件保存对话框
+            filetypes = [("日志文件", "*.txt"), ("所有文件", "*.*")]
             filename = filedialog.asksaveasfilename(
-                title=self.lang_manager.get_text('select_log_file'),
+                title="选择日志保存路径",
                 defaultextension=".txt",
-                filetypes=[
-                    ("文本文件", "*.txt"),
-                    ("日志文件", "*.log"),
-                    ("所有文件", "*.*")
-                ],
-                initialfile=f"can_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"  # 修正参数名
+                filetypes=filetypes,
+                initialfile=f"can_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
             )
-            
-            if filename:  # 用户选择了文件
-                # 打开日志文件
-                self.log_file = open(filename, 'w', encoding='utf-8')
-                self.log_filename = filename
-                
-                # 写入日志文件头部信息
-                header = f"CAN协议上位机日志文件\n"
-                header += f"创建时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                header += f"设备类型: 创芯科技CANalyst-II\n"
-                header += "=" * 50 + "\n\n"
-                
-                self.log_file.write(header)
-                self.log_file.flush()  # 立即写入文件
-                
-                self.log_message(f"自动保存日志已开启，日志文件: {self.log_filename}")
-                
-            else:
-                # 用户取消了文件选择，取消勾选
+            if not filename:
+                # 用户取消选择，自动保存不生效
                 self.auto_save_var.set(False)
-                
+                return
+
+            self.log_filename = filename
+            self.log_file = open(self.log_filename, 'w', encoding='utf-8')
+
+            # 写入日志文件头部信息
+            header = f"CAN协议上位机日志文件\n"
+            header += f"创建时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            header += f"设备类型: 创芯科技CANalyst-II\n"
+            header += "=" * 50 + "\n\n"
+            self.log_file.write(header)
+            self.log_file.flush()
+
+            self.log_message(f"自动保存日志已开启，日志文件: {self.log_filename}")
+
         except Exception as e:
             messagebox.showerror("错误", f"无法创建日志文件: {str(e)}")
-            self.auto_save_var.set(False)  # 取消勾选
+            self.auto_save_var.set(False)
     
     def stop_auto_save(self):
         """停止自动保存日志"""
@@ -569,19 +525,22 @@ class CANHostComputer:
             self.start_btn.config(state="normal")
             self.receive_check.config(state="normal")  # 确保复选框可用
             
-            self.status_var.set(self.lang_manager.get_text('connected'))
-            self.heartbeat_status_var.set(self.lang_manager.get_text('waiting'))  # 初始状态为等待
+            self.status_var.set("已连接")
+            lang = LANGUAGES[self.lang]
+            self.heartbeat_status_var.set(lang['waiting'])  # 初始状态为等待
             self.heartbeat_count = 0  # 重置心跳计数
             
             # 重置表格中的心跳状态
             current_time = datetime.now().strftime("%H:%M:%S")
-            self.update_table_item('0x351', self.lang_manager.get_text('heartbeat_status_param'), '0', '', self.lang_manager.get_text('stopped'), current_time)
+            lang = LANGUAGES[self.lang]
+            self.update_table_item('0x351', lang['table_351'][0][0], '0', '', lang['waiting'], current_time)
             
             # 重置发送数据表格状态
-            self.update_send_data_table(0x305, self.lang_manager.get_text('stopped_sending'), 0, current_time)
-            self.update_send_data_table(0x307, self.lang_manager.get_text('stopped_sending'), 0, current_time)
+            lang = LANGUAGES[self.lang]
+            self.update_send_data_table(0x305, lang['stop_send'], 0, current_time)
+            self.update_send_data_table(0x307, lang['stop_send'], 0, current_time)
             
-            self.log_message(self.lang_manager.get_text('can_device_connected'))
+            self.log_message("CAN设备连接成功")
             
         except Exception as e:
             messagebox.showerror("连接错误", f"无法连接CAN设备: {str(e)}")
@@ -626,16 +585,18 @@ class CANHostComputer:
         self.receive_check.config(state="disabled")  # 禁用接收复选框
         self.receive_var.set(False)  # 取消勾选
         
-        self.status_var.set(self.lang_manager.get_text('not_connected'))
+        self.status_var.set("未连接")
         self.heartbeat_count = 0  # 重置心跳计数
         
         # 重置表格中的心跳状态
         current_time = datetime.now().strftime("%H:%M:%S")
-        self.update_table_item('0x351', self.lang_manager.get_text('heartbeat_status_param'), '0', '', self.lang_manager.get_text('stopped'), current_time)
+        lang = LANGUAGES[self.lang]
+        self.update_table_item('0x351', lang['table_351'][0][0], '0', '', lang['stop'], current_time)
         
         # 重置发送数据表格状态
-        self.update_send_data_table(0x305, self.lang_manager.get_text('stopped_sending'), 0, current_time)
-        self.update_send_data_table(0x307, self.lang_manager.get_text('stopped_sending'), 0, current_time)
+        lang = LANGUAGES[self.lang]
+        self.update_send_data_table(0x305, lang['stop_send'], 0, current_time)
+        self.update_send_data_table(0x307, lang['stop_send'], 0, current_time)
         
         self.log_message("CAN设备已断开")
     
@@ -654,8 +615,9 @@ class CANHostComputer:
         
         # 更新发送数据表格初始状态 - 改为"正在发送"
         current_time = datetime.now().strftime("%H:%M:%S")
-        self.update_send_data_table(0x305, self.lang_manager.get_text('sending'), 0, current_time)
-        self.update_send_data_table(0x307, self.lang_manager.get_text('sending'), 0, current_time)
+        lang = LANGUAGES[self.lang]
+        self.update_send_data_table(0x305, lang['start_send_status'], 0, current_time)
+        self.update_send_data_table(0x307, lang['start_send_status'], 0, current_time)
         
         # 启动发送线程
         self.send_thread = threading.Thread(target=self.send_messages, daemon=True)
@@ -671,8 +633,9 @@ class CANHostComputer:
         
         # 更新发送数据表格停止状态 - 改为"已停止"
         current_time = datetime.now().strftime("%H:%M:%S")
-        self.update_send_data_table(0x305, self.lang_manager.get_text('stopped_status'), self.sent_305_count, current_time)
-        self.update_send_data_table(0x307, self.lang_manager.get_text('stopped_status'), self.sent_307_count, current_time)
+        lang = LANGUAGES[self.lang]
+        self.update_send_data_table(0x305, lang['stopped'], self.sent_305_count, current_time)
+        self.update_send_data_table(0x307, lang['stopped'], self.sent_307_count, current_time)
         
         self.log_message("停止发送CAN报文")
         
@@ -689,7 +652,8 @@ class CANHostComputer:
                 
                 # 更新发送数据表格 - 保持"正在发送"状态
                 current_time = datetime.now().strftime("%H:%M:%S")
-                self.update_send_data_table(0x305, self.lang_manager.get_text('sending'), self.sent_305_count, current_time)
+                lang = LANGUAGES[self.lang]
+                self.update_send_data_table(0x305, lang['start_send_status'], self.sent_305_count, current_time)
                 
                 self.log_message(f"发送: ID=0x305, 数据: {msg_305_data.hex()}")
                 
@@ -702,7 +666,8 @@ class CANHostComputer:
                 
                 # 更新发送数据表格 - 保持"正在发送"状态
                 current_time = datetime.now().strftime("%H:%M:%S")
-                self.update_send_data_table(0x307, self.lang_manager.get_text('sending'), self.sent_307_count, current_time)
+                lang = LANGUAGES[self.lang]
+                self.update_send_data_table(0x307, lang['start_send_status'], self.sent_307_count, current_time)
                 
                 self.log_message(f"发送: ID=0x307, 数据: {msg_307_data.hex()}")
                 
@@ -810,6 +775,8 @@ class CANHostComputer:
     def monitor_heartbeat(self):
         """监控心跳的线程函数"""
         self.log_message("心跳监控线程已启动")
+        heartbeat_timeout_reported = False  # 添加标志，避免重复报告超时
+        
         while self.is_receiving and self.is_connected:
             try:
                 # 接收CAN报文
@@ -826,11 +793,18 @@ class CANHostComputer:
                         if msg['id'] == 0x351:
                             self.last_heartbeat_time = time.time()
                             self.heartbeat_count += 1  # 增加心跳计数
-                            self.heartbeat_status_var.set(self.lang_manager.get_text('normal'))
+                            lang = LANGUAGES[self.lang]
+                            self.heartbeat_status_var.set(lang['normal'])
+                            self.heartbeat_status_label.config(foreground="black") # 恢复黑色
+                            
+                            # 重置超时报告标志
+                            heartbeat_timeout_reported = False
                             
                             # 更新表格中的心跳状态
                             current_time = datetime.now().strftime("%H:%M:%S")
-                            self.update_table_item('0x351', self.lang_manager.get_text('heartbeat_status_param'), str(self.heartbeat_count), '', self.lang_manager.get_text('normal'), current_time)
+                            lang = LANGUAGES[self.lang]
+                            self.update_table_item('0x351', lang['table_351'][0][0], str(self.heartbeat_count), '', lang['normal'], current_time)
+                            self.set_table_item_color('0x351', lang['table_351'][0][0], 'black')
                             
                             self.log_message(f"收到心跳标志: ID=0x351, 数据: {bytes(msg['data']).hex()}")
                             
@@ -839,7 +813,9 @@ class CANHostComputer:
                 
             # 检查心跳超时（3秒未收到0x351）
             if self.last_heartbeat_time and (time.time() - self.last_heartbeat_time) > 3:
-                self.root.after(0, self.handle_heartbeat_timeout)
+                if not heartbeat_timeout_reported:  # 只在第一次超时时报告
+                    self.root.after(0, self.handle_heartbeat_timeout)
+                    heartbeat_timeout_reported = True
     
     def process_received_message(self, msg):
         """处理接收到的CAN报文"""
@@ -860,20 +836,22 @@ class CANHostComputer:
                 
     def handle_heartbeat_timeout(self):
         """处理心跳超时"""
-        self.heartbeat_status_var.set(self.lang_manager.get_text('stopped'))
-        
+        lang = LANGUAGES[self.lang]
+        self.heartbeat_status_var.set(lang['stop'])
+        # 设置统计信息区域为红色
+        self.heartbeat_status_label.config(foreground="red")
         # 更新表格中的心跳状态
         current_time = datetime.now().strftime("%H:%M:%S")
-        self.update_table_item('0x351', self.lang_manager.get_text('heartbeat_status_param'), str(self.heartbeat_count), '', self.lang_manager.get_text('stopped'), current_time)
-        
-        messagebox.showwarning("心跳超时", self.lang_manager.get_text('heartbeat_timeout'))
-        self.log_message(self.lang_manager.get_text('warning') + ": " + self.lang_manager.get_text('heartbeat_timeout'))
-        # 注意：这里不自动断开连接，只是提示心跳停止
+        self.update_table_item('0x351', lang['table_351'][0][0], str(self.heartbeat_count), '', lang['stop'], current_time)
+        # 设置表格中“停止”为红色
+        self.set_table_item_color('0x351', lang['table_351'][0][0], 'red')
+        # 日志记录
+        self.log_message("警告: BMS心跳终止，3秒未收到0x351报文", color="red")
 
     def test_receive(self):
         """手动测试接收功能"""
         if not self.is_connected:
-            messagebox.showwarning("警告", self.lang_manager.get_text('please_connect_first'))
+            messagebox.showwarning("警告", "请先连接CAN设备")
             return
             
         self.log_message("开始测试接收功能...")
@@ -923,7 +901,7 @@ class CANHostComputer:
     def switch_channel(self):
         """切换CAN通道"""
         if not self.is_connected:
-            messagebox.showwarning("警告", self.lang_manager.get_text('please_connect_first'))
+            messagebox.showwarning("警告", "请先连接CAN设备")
             return
             
         current_channel = int(self.can_index_var.get())
@@ -943,7 +921,7 @@ class CANHostComputer:
     def force_receive_test(self):
         """强制接收测试"""
         if not self.is_connected:
-            messagebox.showwarning("警告", self.lang_manager.get_text('please_connect_first'))
+            messagebox.showwarning("警告", "请先连接CAN设备")
             return
             
         self.log_message("开始强制接收测试...")
@@ -988,7 +966,7 @@ class CANHostComputer:
     def start_receiving(self):
         """启动接收CAN报文的线程"""
         if not self.is_connected:
-            self.log_message(self.lang_manager.get_text('please_connect_first'), color="orange")
+            self.log_message("请先连接CAN总线。", color="orange")
             self.receive_check.config(state="disabled")
             return
         
@@ -999,17 +977,18 @@ class CANHostComputer:
         self.is_receiving = True
         
         # 重置心跳状态
-        self.heartbeat_status_var.set(self.lang_manager.get_text('waiting'))
+        lang = LANGUAGES[self.lang]
+        self.heartbeat_status_var.set(lang['waiting'])
         self.heartbeat_count = 0
         self.last_heartbeat_time = None
         
         # 重置表格中的心跳状态
         current_time = datetime.now().strftime("%H:%M:%S")
-        self.update_table_item('0x351', self.lang_manager.get_text('heartbeat_status_param'), '0', '', self.lang_manager.get_text('waiting'), current_time)
+        self.update_table_item('0x351', lang['table_351'][0][0], '0', '', lang['waiting'], current_time)
         
         self.receive_thread = threading.Thread(target=self.monitor_heartbeat, daemon=True)
         self.receive_thread.start()
-        self.log_message(self.lang_manager.get_text('已开启接收CAN报文'), color="green")
+        self.log_message("已开启接收CAN报文。", color="green")
     
     def stop_receiving(self):
         """停止接收CAN报文的线程"""
@@ -1023,15 +1002,16 @@ class CANHostComputer:
             self.receive_thread.join(timeout=1) # Give it a second to finish
         
         # 重置心跳状态
-        self.heartbeat_status_var.set(self.lang_manager.get_text('stopped'))
+        lang = LANGUAGES[self.lang]
+        self.heartbeat_status_var.set(lang['stop'])
         self.heartbeat_count = 0
         self.last_heartbeat_time = None
         
         # 重置表格中的心跳状态
         current_time = datetime.now().strftime("%H:%M:%S")
-        self.update_table_item('0x351', self.lang_manager.get_text('heartbeat_status_param'), '0', '', self.lang_manager.get_text('stopped'), current_time)
+        self.update_table_item('0x351', lang['table_351'][0][0], '0', '', lang['stop'], current_time)
         
-        self.log_message(self.lang_manager.get_text('停止接收CAN报文'), color="green")
+        self.log_message("停止接收CAN报文。", color="green")
 
     def monitor_receive(self):
         """接收报文的独立线程函数"""
@@ -1049,7 +1029,9 @@ class CANHostComputer:
                         # 检查心跳报文
                         if msg['id'] == 0x351:
                             self.last_heartbeat_time = time.time()
-                            self.heartbeat_status_var.set(self.lang_manager.get_text('normal'))
+                            lang = LANGUAGES[self.lang]
+                            self.heartbeat_status_var.set(lang['normal'])
+                            self.heartbeat_status_label.config(foreground="black") # 恢复黑色
                             self.log_message(f"收到心跳: ID=0x351, 数据: {bytes(msg['data']).hex()}")
                 else:
                     # 减少调试信息频率
@@ -1069,24 +1051,26 @@ class CANHostComputer:
         table_frame.pack(fill="both", expand=True)
         
         # 创建Treeview表格 - 调整高度
-        columns = (self.lang_manager.get_text('can_id'), self.lang_manager.get_text('parameter'), self.lang_manager.get_text('value'), self.lang_manager.get_text('unit'), self.lang_manager.get_text('status'), self.lang_manager.get_text('refresh_time'))
+        lang = LANGUAGES[self.lang]
+        columns = ('CAN ID', 'parameter', 'value', 'unit', 'status', 'refresh_time')
+        column_texts = (lang['can_id'], lang['parameter'], lang['value'], lang['unit'], lang['status_col'], lang['refresh_time'])
         self.data_tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=12)  # 增加高度
         
         # 设置列标题
-        for col in columns:
-            self.data_tree.heading(col, text=col)
+        for i, col in enumerate(columns):
+            self.data_tree.heading(col, text=column_texts[i])
             # 调整列宽
-            if col == self.lang_manager.get_text('can_id'):
+            if col == 'CAN ID':
                 self.data_tree.column(col, width=80, anchor='center')
-            elif col == self.lang_manager.get_text('parameter'):
+            elif col == 'parameter':
                 self.data_tree.column(col, width=150, anchor='w')
-            elif col == self.lang_manager.get_text('value'):
+            elif col == 'value':
                 self.data_tree.column(col, width=100, anchor='center')
-            elif col == self.lang_manager.get_text('unit'):
+            elif col == 'unit':
                 self.data_tree.column(col, width=60, anchor='center')
-            elif col == self.lang_manager.get_text('status'):
+            elif col == 'status':
                 self.data_tree.column(col, width=80, anchor='center')
-            elif col == self.lang_manager.get_text('refresh_time'):
+            elif col == 'refresh_time':
                 self.data_tree.column(col, width=120, anchor='center')
         
         # 添加滚动条
@@ -1102,69 +1086,69 @@ class CANHostComputer:
     
     def initialize_table_data(self):
         """初始化表格数据"""
-        # 清空现有数据
+        lang = LANGUAGES[self.lang]
         for item in self.data_tree.get_children():
             self.data_tree.delete(item)
         
-        # 添加0x351数据项（包括心跳状态）
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('heartbeat_status'), '0', '', self.lang_manager.get_text('stopped'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('charge_voltage_limit'), '--', self.lang_manager.get_text('unit'), self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('max_charge_current'), '--', self.lang_manager.get_text('unit'), self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('max_discharge_current'), '--', self.lang_manager.get_text('unit'), self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('discharge_voltage'), '--', self.lang_manager.get_text('unit'), self.lang_manager.get_text('waiting'), '--'))
+        # 0x351 - 心跳状态特殊处理
+        self.data_tree.insert('', 'end', values=('0x351', lang['table_351'][0][0], '0', '', lang['waiting'], '--'))
         
-        # 添加0x355数据项
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('soc_value'), '--', self.lang_manager.get_text('unit'), self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('soh_value'), '--', self.lang_manager.get_text('unit'), self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('high_precision_soc'), '--', self.lang_manager.get_text('unit'), self.lang_manager.get_text('waiting'), '--'))
+        # 0x351 - 其他参数
+        for label, key in lang['table_351'][1:]:  # 跳过第一个心跳状态
+            unit = ''
+            if 'voltage' in key or '电压' in label:
+                unit = 'V'
+            elif 'current' in key or '电流' in label:
+                unit = 'A'
+            self.data_tree.insert('', 'end', values=('0x351', label, '--', unit, lang['waiting'], '--'))
         
-        # 添加0x356数据项
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_voltage'), '--', self.lang_manager.get_text('unit'), self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_current'), '--', self.lang_manager.get_text('unit'), self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_temperature'), '--', self.lang_manager.get_text('unit'), self.lang_manager.get_text('waiting'), '--'))
+        # 0x355
+        for label, key in lang.get('table_355', []):
+            unit = '%' if 'soc' in key.lower() or 'soh' in key.lower() else ''
+            self.data_tree.insert('', 'end', values=('0x355', label, '--', unit, lang['waiting'], '--'))
         
-        # 添加0x35A数据项（包含Alarm和Warning信息）
-        # Alarm信息
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_high_voltage_alarm'), '--', '', self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_low_voltage_alarm'), '--', '', self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_high_temp_alarm'), '--', '', self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_low_temp_alarm'), '--', '', self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_high_current_alarm'), '--', '', self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('bms_internal_alarm'), '--', '', self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('cell_imbalance_alarm'), '--', '', self.lang_manager.get_text('waiting'), '--'))
+        # 0x356
+        for label, key in lang.get('table_356', []):
+            unit = ''
+            if 'voltage' in key or '电压' in label:
+                unit = 'V'
+            elif 'current' in key or '电流' in label:
+                unit = 'A'
+            elif 'temperature' in key or '温度' in label:
+                unit = '°C'
+            self.data_tree.insert('', 'end', values=('0x356', label, '--', unit, lang['waiting'], '--'))
         
-        # Warning信息
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_high_voltage_warning'), '--', '', self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_low_voltage_warning'), '--', '', self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_high_temp_warning'), '--', '', self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_low_temp_warning'), '--', '', self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_high_current_warning'), '--', '', self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('bms_internal_warning'), '--', '', self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('cell_imbalance_warning'), '--', '', self.lang_manager.get_text('waiting'), '--'))
-        self.data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('system_status'), '--', '', self.lang_manager.get_text('waiting'), '--'))
+        # 0x35A - Alarm信息
+        for label, key in lang['table_35A_alarm']:
+            self.data_tree.insert('', 'end', values=('0x35A', label, '--', '', lang['waiting'], '--'))
+
+        # 0x35A - Warning信息
+        for label, key in lang['table_35A_warning']:
+            self.data_tree.insert('', 'end', values=('0x35A', label, '--', '', lang['waiting'], '--'))
     
     def update_table_data(self, can_id, parsed_data):
         """更新表格数据"""
+        lang = LANGUAGES[self.lang]
         current_time = datetime.now().strftime("%H:%M:%S")
         
         if can_id == 0x351:
             # 更新0x351数据
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('charge_voltage_limit'), f"{parsed_data.get('charge_voltage_limit', 0):.1f}", self.lang_manager.get_text('unit'), self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('max_charge_current'), f"{parsed_data.get('max_charge_current', 0):.1f}", self.lang_manager.get_text('unit'), self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('max_discharge_current'), f"{parsed_data.get('max_discharge_current', 0):.1f}", self.lang_manager.get_text('unit'), self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('discharge_voltage'), f"{parsed_data.get('discharge_voltage', 0):.1f}", self.lang_manager.get_text('unit'), self.lang_manager.get_text('normal'), current_time)
+            self.update_table_item('0x351', lang['table_351'][1][0], f"{parsed_data.get('charge_voltage_limit', 0):.1f}", 'V', lang['normal'], current_time)
+            self.update_table_item('0x351', lang['table_351'][2][0], f"{parsed_data.get('max_charge_current', 0):.1f}", 'A', lang['normal'], current_time)
+            self.update_table_item('0x351', lang['table_351'][3][0], f"{parsed_data.get('max_discharge_current', 0):.1f}", 'A', lang['normal'], current_time)
+            self.update_table_item('0x351', lang['table_351'][4][0], f"{parsed_data.get('discharge_voltage', 0):.1f}", 'V', lang['normal'], current_time)
             
         elif can_id == 0x355:
             # 更新0x355数据
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('soc_value'), f"{parsed_data.get('soc_value', 0)}", self.lang_manager.get_text('unit'), self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('soh_value'), f"{parsed_data.get('soh_value', 0)}", self.lang_manager.get_text('unit'), self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('high_precision_soc'), f"{parsed_data.get('high_res_soc', 0):.2f}", self.lang_manager.get_text('unit'), self.lang_manager.get_text('normal'), current_time)
+            self.update_table_item('0x355', lang['table_355'][0][0], f"{parsed_data.get('soc_value', 0)}", '%', lang['normal'], current_time)
+            self.update_table_item('0x355', lang['table_355'][1][0], f"{parsed_data.get('soh_value', 0)}", '%', lang['normal'], current_time)
+            self.update_table_item('0x355', lang['table_355'][2][0], f"{parsed_data.get('high_res_soc', 0):.2f}", '%', lang['normal'], current_time)
             
         elif can_id == 0x356:
             # 更新0x356数据
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_voltage'), f"{parsed_data.get('battery_voltage', 0):.2f}", self.lang_manager.get_text('unit'), self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_current'), f"{parsed_data.get('battery_current', 0):.1f}", self.lang_manager.get_text('unit'), self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_temperature'), f"{parsed_data.get('battery_temperature', 0):.1f}", self.lang_manager.get_text('unit'), self.lang_manager.get_text('normal'), current_time)
+            self.update_table_item('0x356', lang['table_356'][0][0], f"{parsed_data.get('battery_voltage', 0):.2f}", 'V', lang['normal'], current_time)
+            self.update_table_item('0x356', lang['table_356'][1][0], f"{parsed_data.get('battery_current', 0):.1f}", 'A', lang['normal'], current_time)
+            self.update_table_item('0x356', lang['table_356'][2][0], f"{parsed_data.get('battery_temperature', 0):.1f}", '°C', lang['normal'], current_time)
             
         elif can_id == 0x35A:
             # 更新0x35A报警和警告状态
@@ -1172,23 +1156,12 @@ class CANHostComputer:
             warnings = parsed_data.get('warnings', {})
             
             # 更新Alarm信息
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_high_voltage_alarm'), self.lang_manager.get_text('yes') if alarms.get('battery_high_voltage_alarm', False) else self.lang_manager.get_text('no'), '', self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_low_voltage_alarm'), self.lang_manager.get_text('yes') if alarms.get('battery_low_voltage_alarm', False) else self.lang_manager.get_text('no'), '', self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_high_temp_alarm'), self.lang_manager.get_text('yes') if alarms.get('battery_high_temp_alarm', False) else self.lang_manager.get_text('no'), '', self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_low_temp_alarm'), self.lang_manager.get_text('yes') if alarms.get('battery_low_temp_alarm', False) else self.lang_manager.get_text('no'), '', self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_high_current_alarm'), self.lang_manager.get_text('yes') if alarms.get('battery_high_current_alarm', False) else self.lang_manager.get_text('no'), '', self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('bms_internal_alarm'), self.lang_manager.get_text('yes') if alarms.get('bms_internal_alarm', False) else self.lang_manager.get_text('no'), '', self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('cell_imbalance_alarm'), self.lang_manager.get_text('yes') if alarms.get('cell_imbalance_alarm', False) else self.lang_manager.get_text('no'), '', self.lang_manager.get_text('normal'), current_time)
+            for i, (label, key) in enumerate(lang['table_35A_alarm']):
+                self.update_table_item('0x35A', label, lang['yes'] if alarms.get(key, False) else lang['no'], '', lang['normal'], current_time)
             
             # 更新Warning信息
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_high_voltage_warning'), self.lang_manager.get_text('yes') if warnings.get('battery_high_voltage', False) else self.lang_manager.get_text('no'), '', self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_low_voltage_warning'), self.lang_manager.get_text('yes') if warnings.get('battery_low_voltage', False) else self.lang_manager.get_text('no'), '', self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_high_temp_warning'), self.lang_manager.get_text('yes') if warnings.get('battery_high_temp', False) else self.lang_manager.get_text('no'), '', self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_low_temp_warning'), self.lang_manager.get_text('yes') if warnings.get('battery_low_temp', False) else self.lang_manager.get_text('no'), '', self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('battery_high_current_warning'), self.lang_manager.get_text('yes') if warnings.get('battery_high_current', False) else self.lang_manager.get_text('no'), '', self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('bms_internal_warning'), self.lang_manager.get_text('yes') if warnings.get('bms_internal', False) else self.lang_manager.get_text('no'), '', self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('cell_imbalance_warning'), self.lang_manager.get_text('yes') if warnings.get('cell_imbalance', False) else self.lang_manager.get_text('no'), '', self.lang_manager.get_text('normal'), current_time)
-            self.update_table_item(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('system_status'), self.lang_manager.get_text('online') if warnings.get('system_online', False) else self.lang_manager.get_text('offline'), '', self.lang_manager.get_text('normal'), current_time)
+            for label, key in lang['table_35A_warning']:
+                self.update_table_item('0x35A', label, lang['yes'] if warnings.get(key, False) else lang['no'], '', lang['normal'], current_time)
     
     def update_table_item(self, can_id, parameter, value, unit, status, update_time):
         """更新表格中的单个项目"""
@@ -1205,22 +1178,24 @@ class CANHostComputer:
         table_frame.pack(fill="x")
         
         # 创建Treeview表格 - 调整高度
-        columns = (self.lang_manager.get_text('can_id'), self.lang_manager.get_text('send_status'), self.lang_manager.get_text('send_count'), self.lang_manager.get_text('status'), self.lang_manager.get_text('send_time'))
+        lang = LANGUAGES[self.lang]
+        columns = ('CAN ID', 'send_status', 'send_count', 'status', 'send_time')
+        column_texts = (lang['can_id'], lang['send_status'], lang['send_count'], lang['status_col'], lang['send_time'])
         self.send_data_tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=3)  # 减少高度
         
         # 设置列标题
-        for col in columns:
-            self.send_data_tree.heading(col, text=col)
+        for i, col in enumerate(columns):
+            self.send_data_tree.heading(col, text=column_texts[i])
             # 调整列宽
-            if col == self.lang_manager.get_text('can_id'):
+            if col == 'CAN ID':
                 self.send_data_tree.column(col, width=80, anchor='center')
-            elif col == self.lang_manager.get_text('send_status'):
+            elif col == 'send_status':
                 self.send_data_tree.column(col, width=150, anchor='w')
-            elif col == self.lang_manager.get_text('send_count'):
+            elif col == 'send_count':
                 self.send_data_tree.column(col, width=100, anchor='center')
-            elif col == self.lang_manager.get_text('status'):
+            elif col == 'status':
                 self.send_data_tree.column(col, width=80, anchor='center')
-            elif col == self.lang_manager.get_text('send_time'):
+            elif col == 'send_time':
                 self.send_data_tree.column(col, width=120, anchor='center')
         
         # 添加滚动条
@@ -1236,22 +1211,25 @@ class CANHostComputer:
     
     def initialize_send_data_table(self):
         """初始化发送数据表格"""
+        lang = LANGUAGES[self.lang]
+        
         # 清空现有数据
         for item in self.send_data_tree.get_children():
             self.send_data_tree.delete(item)
         
         # 添加0x305数据项 - 初始状态为"停止发送"
-        self.send_data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('stopped_sending'), '0', self.lang_manager.get_text('stopped'), '--'))
+        self.send_data_tree.insert('', 'end', values=('0x305', lang['stop_send'], '0', lang['stop'], '--'))
         
         # 添加0x307数据项 - 初始状态为"停止发送"
-        self.send_data_tree.insert('', 'end', values=(self.lang_manager.get_text('can_id'), self.lang_manager.get_text('stopped_sending'), '0', self.lang_manager.get_text('stopped'), '--'))
+        self.send_data_tree.insert('', 'end', values=('0x307', lang['stop_send'], '0', lang['stop'], '--'))
     
     def update_send_data_table(self, can_id, status, count, send_time):
         """更新发送数据表格"""
+        lang = LANGUAGES[self.lang]
         if can_id == 0x305:
-            self.update_send_table_item(self.lang_manager.get_text('can_id'), status, str(count), self.lang_manager.get_text('normal'), send_time)
+            self.update_send_table_item('0x305', status, str(count), lang['normal'], send_time)
         elif can_id == 0x307:
-            self.update_send_table_item(self.lang_manager.get_text('can_id'), status, str(count), self.lang_manager.get_text('normal'), send_time)
+            self.update_send_table_item('0x307', status, str(count), lang['normal'], send_time)
     
     def update_send_table_item(self, can_id, send_status, count, status, send_time):
         """更新发送表格中的单个项目"""
@@ -1262,208 +1240,132 @@ class CANHostComputer:
                 break
 
     def start_auto_save_on_startup(self):
-        """程序启动时自动开始保存日志 - 现在不自动开始"""
-        # 移除自动开始保存的逻辑
-        pass
-
-    def switch_language(self, language):
-        """切换语言"""
-        if self.lang_manager.switch_language(language):
-            # 更新窗口标题
-            self.root.title(self.lang_manager.get_text('window_title'))
-            
-            # 只更新界面文本，不重新创建整个界面
-            self.update_ui_language()
-    
-    def update_ui_language(self):
-        """更新界面语言文本"""
-        # 保存当前状态
-        current_state = self.save_current_state()
-        
-        # 更新连接设置框架
-        self.update_connection_frame_text()
-        
-        # 更新控制框架
-        self.update_control_frame_text()
-        
-        # 更新统计信息框架
-        self.update_statistics_frame_text()
-        
-        # 更新发送数据框架
-        self.update_send_data_frame_text()
-        
-        # 更新实时数据框架
-        self.update_real_time_data_frame_text()
-        
-        # 更新日志框架
-        self.update_log_frame_text()
-        
-        # 恢复状态
-        self.restore_state(current_state)
-    
-    def update_connection_frame_text(self):
-        """更新连接设置框架文本"""
-        # 更新框架标题
-        for widget in self.root.winfo_children():
-            if isinstance(widget, ttk.Frame):
-                for child in widget.winfo_children():
-                    if isinstance(child, ttk.LabelFrame):
-                        if "连接设置" in child.cget("text") or "Connection Settings" in child.cget("text"):
-                            child.configure(text=self.lang_manager.get_text('connection_settings'))
-                            break
-        
-        # 更新按钮文本
-        if hasattr(self, 'connect_btn'):
-            self.connect_btn.configure(text=self.lang_manager.get_text('connect'))
-        if hasattr(self, 'disconnect_btn'):
-            self.disconnect_btn.configure(text=self.lang_manager.get_text('disconnect'))
-    
-    def update_control_frame_text(self):
-        """更新控制框架文本"""
-        # 更新框架标题
-        for widget in self.root.winfo_children():
-            if isinstance(widget, ttk.Frame):
-                for child in widget.winfo_children():
-                    if isinstance(child, ttk.LabelFrame):
-                        if "控制" in child.cget("text") or "Control" in child.cget("text"):
-                            child.configure(text=self.lang_manager.get_text('control'))
-                            break
-        
-        # 更新按钮文本
-        if hasattr(self, 'start_btn'):
-            self.start_btn.configure(text=self.lang_manager.get_text('start_sending'))
-        if hasattr(self, 'stop_btn'):
-            self.stop_btn.configure(text=self.lang_manager.get_text('stop_sending'))
-        if hasattr(self, 'receive_check'):
-            self.receive_check.configure(text=self.lang_manager.get_text('enable_receiving'))
-    
-    def update_statistics_frame_text(self):
-        """更新统计信息框架文本"""
-        # 更新框架标题
-        for widget in self.root.winfo_children():
-            if isinstance(widget, ttk.Frame):
-                for child in widget.winfo_children():
-                    if isinstance(child, ttk.LabelFrame):
-                        if "统计信息" in child.cget("text") or "Statistics" in child.cget("text"):
-                            child.configure(text=self.lang_manager.get_text('statistics'))
-                            break
-    
-    def update_send_data_frame_text(self):
-        """更新发送数据框架文本"""
-        # 更新框架标题
-        for widget in self.root.winfo_children():
-            if isinstance(widget, ttk.Frame):
-                for child in widget.winfo_children():
-                    if isinstance(child, ttk.LabelFrame):
-                        if "发送数据" in child.cget("text") or "Send Data" in child.cget("text"):
-                            child.configure(text=self.lang_manager.get_text('send_data'))
-                            break
-    
-    def update_real_time_data_frame_text(self):
-        """更新实时数据框架文本"""
-        # 更新框架标题
-        for widget in self.root.winfo_children():
-            if isinstance(widget, ttk.Frame):
-                for child in widget.winfo_children():
-                    if isinstance(child, ttk.LabelFrame):
-                        if "实时数据" in child.cget("text") or "Real-time Data" in child.cget("text"):
-                            child.configure(text=self.lang_manager.get_text('real_time_data'))
-                            break
-    
-    def update_log_frame_text(self):
-        """更新日志框架文本"""
-        # 更新框架标题
-        for widget in self.root.winfo_children():
-            if isinstance(widget, ttk.Frame):
-                for child in widget.winfo_children():
-                    if isinstance(child, ttk.LabelFrame):
-                        if "通信日志" in child.cget("text") or "Communication Log" in child.cget("text"):
-                            child.configure(text=self.lang_manager.get_text('communication_log'))
-                            break
-        
-        # 更新按钮文本
-        if hasattr(self, 'auto_save_check'):
-            self.auto_save_check.configure(text=self.lang_manager.get_text('auto_save_log'))
-    
-    def recreate_widgets(self):
-        """重新创建界面（语言切换时调用）"""
-        # 保存当前状态
-        current_state = self.save_current_state()
-        
-        # 保存日志文件状态
-        log_file_state = {
-            'log_file': self.log_file,
-            'log_filename': self.log_filename,
-            'auto_save_enabled': self.auto_save_var.get() if hasattr(self, 'auto_save_var') else False
-        }
-        
-        # 清空现有界面
-        for widget in self.root.winfo_children():
-            widget.destroy()
-        
-        # 重新创建界面
-        self.create_widgets()
-        
-        # 恢复状态
-        self.restore_state(current_state)
-        
-        # 恢复日志文件状态
-        if log_file_state['auto_save_enabled'] and not hasattr(self, '_auto_save_initialized'):
-            self.auto_save_var.set(True)
-            # 不重新创建日志文件，继续使用现有的
-            self.log_file = log_file_state['log_file']
-            self.log_filename = log_file_state['log_filename']
-    
-    def save_current_state(self):
-        """保存当前状态"""
-        return {
-            'is_connected': self.is_connected,
-            'is_running': self.is_running,
-            'is_receiving': self.is_receiving,
-            'auto_save_enabled': self.auto_save_var.get() if hasattr(self, 'auto_save_var') else False,
-            'receive_enabled': self.receive_var.get() if hasattr(self, 'receive_var') else False,
-            'device_settings': {
-                'device_type': self.device_type_var.get() if hasattr(self, 'device_type_var') else 'VCI_USBCAN2',
-                'device_index': self.device_index_var.get() if hasattr(self, 'device_index_var') else '0',
-                'can_index': self.can_index_var.get() if hasattr(self, 'can_index_var') else '0',
-                'baudrate': self.baudrate_var.get() if hasattr(self, 'baudrate_var') else '500000'
-            }
-        }
-    
-    def restore_state(self, state):
-        """恢复状态"""
-        # 恢复设备设置
-        if 'device_settings' in state:
-            settings = state['device_settings']
-            if hasattr(self, 'device_type_var'):
-                self.device_type_var.set(settings.get('device_type', 'VCI_USBCAN2'))
-            if hasattr(self, 'device_index_var'):
-                self.device_index_var.set(settings.get('device_index', '0'))
-            if hasattr(self, 'can_index_var'):
-                self.can_index_var.set(settings.get('can_index', '0'))
-            if hasattr(self, 'baudrate_var'):
-                self.baudrate_var.set(settings.get('baudrate', '500000'))
-        
-        # 恢复连接状态
-        if state.get('is_connected', False):
-            self.status_var.set(self.lang_manager.get_text('connected'))
-            self.connect_btn.config(state="disabled")
-            self.disconnect_btn.config(state="normal")
-            self.start_btn.config(state="normal")
-            self.receive_check.config(state="normal")
-        else:
-            self.status_var.set(self.lang_manager.get_text('not_connected'))
-        
-        # 恢复自动保存状态
-        if state.get('auto_save_enabled', False) and hasattr(self, 'auto_save_var'):
-            self.auto_save_var.set(True)
+        """程序启动时自动开始保存日志"""
+        if self.auto_save_var.get():
             self.start_auto_save()
+
+    def on_language_change(self, event=None):
+        self.lang = self.lang_var.get()
+        self.refresh_ui_language()
+
+    def refresh_ui_language(self):
+        """刷新UI语言显示"""
+        lang = LANGUAGES[self.lang]
         
-        # 恢复接收状态
-        if state.get('receive_enabled', False) and hasattr(self, 'receive_var'):
-            self.receive_var.set(True)
-            if state.get('is_connected', False):
-                self.start_receiving()
+        # 更新窗口标题
+        self.root.title(lang['title'])
+        
+        # 更新按钮文本
+        self.connect_btn.config(text=lang['connect'])
+        self.disconnect_btn.config(text=lang['disconnect'])
+        self.start_btn.config(text=lang['start_send'])
+        self.stop_btn.config(text=lang['stop_send'])
+        self.receive_check.config(text=lang['open_receive'])
+        
+        # 更新LabelFrame标题
+        self.connection_frame.config(text=lang['connection_settings'])
+        self.control_frame.config(text=lang['control'])
+        self.stats_frame.config(text=lang['stat_info'])
+        self.send_data_frame.config(text=lang['send_data'])
+        self.data_frame.config(text=lang['realtime_data'])
+        self.log_frame.config(text=lang['log'])
+        
+        # 更新心跳状态显示
+        current_heartbeat_status = self.heartbeat_status_var.get()
+        if current_heartbeat_status in ['正常', 'Normal']:
+            self.heartbeat_status_var.set(lang['normal'])
+            self.heartbeat_status_label.config(foreground="black") # 恢复黑色
+            self.set_table_item_color('0x351', lang['table_351'][0][0], 'black')
+        elif current_heartbeat_status in ['等待', 'Waiting']:
+            self.heartbeat_status_var.set(lang['waiting'])
+            self.heartbeat_status_label.config(foreground="black") # 恢复黑色
+            self.set_table_item_color('0x351', lang['table_351'][0][0], 'black')
+        elif current_heartbeat_status in ['停止', 'Stop']:
+            self.heartbeat_status_var.set(lang['stop'])
+            self.heartbeat_status_label.config(foreground="red") # 设置统计信息区域为红色
+            self.set_table_item_color('0x351', lang['table_351'][0][0], 'red')
+        
+        # 更新标签文本
+        self.update_label_texts(lang)
+        
+        # 重新初始化表格数据以更新列标题和内容
+        self.refresh_table_headers()
+        self.initialize_table_data()
+        self.initialize_send_data_table()
+    
+    def update_label_texts(self, lang):
+        """更新所有标签的文本"""
+        # 这个方法会递归遍历所有控件并更新文本
+        def update_widget_texts(widget):
+            try:
+                if isinstance(widget, ttk.Label):
+                    text = widget.cget('text')
+                    # 更新特定的标签文本
+                    if '语言/Language:' in text or 'Language:' in text:
+                        widget.config(text=lang['language'])
+                    elif '设备类型:' in text or 'Device Type:' in text:
+                        widget.config(text=lang.get('device_type', '设备类型:' if self.lang == 'zh' else 'Device Type:'))
+                    elif '设备索引:' in text or 'Device Index:' in text:
+                        widget.config(text=lang.get('device_index', '设备索引:' if self.lang == 'zh' else 'Device Index:'))
+                    elif 'CAN通道:' in text or 'CAN Channel:' in text:
+                        widget.config(text=lang.get('can_channel', 'CAN通道:' if self.lang == 'zh' else 'CAN Channel:'))
+                    elif '波特率:' in text or 'Baud Rate:' in text:
+                        widget.config(text=lang.get('baud_rate', '波特率:' if self.lang == 'zh' else 'Baud Rate:'))
+                    elif '发送控制:' in text or 'Send Control:' in text:
+                        widget.config(text=lang['send_control'])
+                    elif '接收控制:' in text or 'Receive Control:' in text:
+                        widget.config(text=lang['receive_control'])
+                    elif '发送:' in text or 'Send:' in text:
+                        widget.config(text=lang['send'] + ':')
+                    elif '接收:' in text or 'Receive:' in text:
+                        widget.config(text=lang['receive'] + ':')
+                    elif '心跳状态:' in text or 'Heartbeat:' in text:
+                        widget.config(text=lang['heartbeat_status'] + ':')
+                elif isinstance(widget, ttk.Button):
+                    text = widget.cget('text')
+                    if '清空日志' in text or 'Clear Log' in text:
+                        widget.config(text=lang['clear_log'])
+                elif isinstance(widget, ttk.Checkbutton):
+                    text = widget.cget('text')
+                    if '自动保存日志' in text or 'Auto Save Log' in text:
+                        widget.config(text=lang['auto_save_log'])
+                
+                # 递归处理子控件
+                for child in widget.winfo_children():
+                    update_widget_texts(child)
+            except:
+                pass  # 忽略任何获取或设置文本时的错误
+        
+        update_widget_texts(self.root)
+    
+    def refresh_table_headers(self):
+        """刷新表格表头语言"""
+        lang = LANGUAGES[self.lang]
+        
+        # 更新实时数据表格表头
+        if hasattr(self, 'data_tree'):
+            columns = ('CAN ID', 'parameter', 'value', 'unit', 'status', 'refresh_time')
+            column_texts = (lang['can_id'], lang['parameter'], lang['value'], 
+                           lang['unit'], lang['status_col'], lang['refresh_time'])
+            for i, col in enumerate(columns):
+                self.data_tree.heading(col, text=column_texts[i])
+        
+        # 更新发送数据表格表头
+        if hasattr(self, 'send_data_tree'):
+            columns = ('CAN ID', 'send_status', 'send_count', 'status', 'send_time')
+            column_texts = (lang['can_id'], lang['send_status'], lang['send_count'], 
+                           lang['status_col'], lang['send_time'])
+            for i, col in enumerate(columns):
+                self.send_data_tree.heading(col, text=column_texts[i])
+
+    def set_table_item_color(self, can_id, parameter, color):
+        """设置表格中特定行的字体颜色"""
+        for item in self.data_tree.get_children():
+            values = self.data_tree.item(item)['values']
+            if values[0] == can_id and values[1] == parameter:
+                self.data_tree.tag_configure('heartbeat_stop', foreground=color)
+                self.data_tree.item(item, tags=('heartbeat_stop',))
+                break
 
 def main():
     root = tk.Tk()

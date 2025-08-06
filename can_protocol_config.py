@@ -14,6 +14,8 @@ CAN_IDS = {
     'ERROR_MESSAGE': 0x35A,      # 错误信息
 }
 
+
+
 # 报文数据结构定义
 MESSAGE_STRUCTURES = {
     0x305: {
