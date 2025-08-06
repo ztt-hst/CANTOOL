@@ -281,7 +281,8 @@ class CANHostComputer:
         self.receive_check.pack(side="left", padx=5)
         
         # 状态显示
-        self.status_var = tk.StringVar(value="未连接")
+        lang = LANGUAGES[self.lang]
+        self.status_var = tk.StringVar(value=lang['disconnected'])
         status_label = ttk.Label(btn_frame, textvariable=self.status_var)
         status_label.pack(side="right", padx=5)
         
@@ -525,7 +526,8 @@ class CANHostComputer:
             self.start_btn.config(state="normal")
             self.receive_check.config(state="normal")  # 确保复选框可用
             
-            self.status_var.set("已连接")
+            lang = LANGUAGES[self.lang]
+            self.status_var.set(lang['connected'])
             lang = LANGUAGES[self.lang]
             self.heartbeat_status_var.set(lang['waiting'])  # 初始状态为等待
             self.heartbeat_count = 0  # 重置心跳计数
@@ -585,7 +587,8 @@ class CANHostComputer:
         self.receive_check.config(state="disabled")  # 禁用接收复选框
         self.receive_var.set(False)  # 取消勾选
         
-        self.status_var.set("未连接")
+        lang = LANGUAGES[self.lang]
+        self.status_var.set(lang['disconnected'])
         self.heartbeat_count = 0  # 重置心跳计数
         
         # 重置表格中的心跳状态
@@ -1269,6 +1272,13 @@ class CANHostComputer:
         self.send_data_frame.config(text=lang['send_data'])
         self.data_frame.config(text=lang['realtime_data'])
         self.log_frame.config(text=lang['log'])
+        
+        # 更新连接状态显示
+        current_status = self.status_var.get()
+        if current_status in ['未连接', 'Disconnected']:
+            self.status_var.set(lang['disconnected'])
+        elif current_status in ['已连接', 'Connected']:
+            self.status_var.set(lang['connected'])
         
         # 更新心跳状态显示
         current_heartbeat_status = self.heartbeat_status_var.get()

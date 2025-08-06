@@ -43,6 +43,8 @@ LANGUAGES = {
         'stop': "停止",
         'yes': "是",
         'no': "否",
+        'disconnected': "未连接",
+        'connected': "已连接",
         # 表格项（仅示例，需补全所有项）
         'table_351': [
             ('心跳状态', 'heartbeat_status'),
@@ -137,6 +139,8 @@ LANGUAGES = {
         'stop': "Stop",
         'yes': "Yes",
         'no': "No",
+        'disconnected': "Disconnected",
+        'connected': "Connected",
         # 表格项（仅示例，需补全所有项）
         'table_351': [
             ('Heartbeat', 'heartbeat_status'),
