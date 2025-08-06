@@ -185,39 +185,6 @@ class CANHostComputer:
         # 创建界面
         self.create_widgets()
         
-    def log_message(self, message, color="black"):
-        """添加日志消息"""
-        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-        
-        # 插入时间戳
-        self.log_text.insert(tk.END, f"[{timestamp}] ")
-        
-        # 检查是否包含"心跳状态"
-        if "心跳状态" in message:
-            # 分割消息，找到"心跳状态"的位置
-            parts = message.split("心跳状态")
-            if len(parts) == 2:
-                # 插入前半部分
-                self.log_text.insert(tk.END, parts[0])
-                
-                # 插入红色的"心跳状态"
-                start_pos = self.log_text.index("end-1c")
-                self.log_text.insert(tk.END, "心跳状态")
-                end_pos = self.log_text.index("end-1c")
-                self.log_text.tag_add("heartbeat_red", start_pos, end_pos)
-                
-                # 插入后半部分
-                self.log_text.insert(tk.END, parts[1])
-            else:
-                # 如果分割失败，直接插入
-                self.log_text.insert(tk.END, message)
-        else:
-            # 普通消息直接插入
-            self.log_text.insert(tk.END, message)
-        
-        self.log_text.insert(tk.END, "\n")
-        self.log_text.see(tk.END)
-    
     def create_widgets(self):
         # 主框架
         main_frame = ttk.Frame(self.root)
@@ -361,8 +328,12 @@ class CANHostComputer:
         clear_btn = ttk.Button(log_btn_frame, text="清空日志", command=self.clear_log)
         clear_btn.pack(side="left")
         
-        save_btn = ttk.Button(log_btn_frame, text="保存日志", command=self.save_log)
-        save_btn.pack(side="left", padx=5)
+        # 将保存日志按钮改为勾选框 - 默认勾选
+        self.auto_save_var = tk.BooleanVar(value=True)  # 改为True，默认勾选
+        self.auto_save_check = ttk.Checkbutton(log_btn_frame, text="自动保存日志", 
+                                             variable=self.auto_save_var, 
+                                             command=self.toggle_auto_save)
+        self.auto_save_check.pack(side="left", padx=5)
         
         # 日志文本框
         self.log_text = scrolledtext.ScrolledText(log_frame, height=15)
@@ -371,19 +342,135 @@ class CANHostComputer:
         # 配置文本标签颜色
         self.log_text.tag_configure("heartbeat_red", foreground="red")
         
+        # 初始化日志文件相关变量
+        self.log_file = None
+        self.log_filename = None
+        
+        # 程序启动时自动开始保存日志
+        self.root.after(100, self.start_auto_save_on_startup)
+    
+    def toggle_auto_save(self):
+        """切换自动保存日志功能"""
+        if self.auto_save_var.get():
+            self.start_auto_save()
+        else:
+            self.stop_auto_save()
+    
+    def start_auto_save(self):
+        """开始自动保存日志"""
+        try:
+            # 生成日志文件名
+            self.log_filename = f"can_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+            
+            # 打开日志文件
+            self.log_file = open(self.log_filename, 'w', encoding='utf-8')
+            
+            # 写入日志文件头部信息
+            header = f"CAN协议上位机日志文件\n"
+            header += f"创建时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            header += f"设备类型: 创芯科技CANalyst-II\n"
+            header += "=" * 50 + "\n\n"
+            
+            self.log_file.write(header)
+            self.log_file.flush()  # 立即写入文件
+            
+            self.log_message(f"自动保存日志已开启，日志文件: {self.log_filename}")
+            
+        except Exception as e:
+            messagebox.showerror("错误", f"无法创建日志文件: {str(e)}")
+            self.auto_save_var.set(False)  # 取消勾选
+    
+    def stop_auto_save(self):
+        """停止自动保存日志"""
+        if self.log_file:
+            try:
+                # 写入日志文件尾部信息
+                footer = f"\n" + "=" * 50 + "\n"
+                footer += f"日志结束时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                footer += f"总日志条数: {self.get_log_line_count()}\n"
+                
+                self.log_file.write(footer)
+                self.log_file.close()
+                
+                self.log_message(f"自动保存日志已停止，日志文件: {self.log_filename}")
+                
+            except Exception as e:
+                self.log_message(f"关闭日志文件时出错: {str(e)}")
+            
+            self.log_file = None
+            self.log_filename = None
+    
+    def get_log_line_count(self):
+        """获取日志行数"""
+        try:
+            content = self.log_text.get(1.0, tk.END)
+            return len(content.split('\n')) - 1  # 减去最后一行空行
+        except:
+            return 0
+    
+    def log_message(self, message, color="black"):
+        """添加日志消息"""
+        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        
+        # 构建完整的日志消息
+        log_entry = f"[{timestamp}] {message}\n"
+        
+        # 插入到界面文本框
+        self.log_text.insert(tk.END, log_entry)
+        
+        # 检查是否包含"心跳状态"并设置颜色
+        if "心跳状态" in message:
+            # 获取刚插入的行的起始和结束位置
+            last_line_start = self.log_text.index("end-2l linestart")
+            last_line_end = self.log_text.index("end-1c")
+            
+            # 为整行设置红色标签
+            self.log_text.tag_add("heartbeat_red", last_line_start, last_line_end)
+        
+        self.log_text.see(tk.END)
+        
+        # 如果开启了自动保存，同时写入文件
+        if self.auto_save_var.get() and self.log_file:
+            try:
+                self.log_file.write(log_entry)
+                self.log_file.flush()  # 立即写入文件，确保数据不丢失
+            except Exception as e:
+                # 如果写入文件失败，在界面上显示错误
+                error_msg = f"[{timestamp}] 写入日志文件失败: {str(e)}\n"
+                self.log_text.insert(tk.END, error_msg)
+                self.log_text.see(tk.END)
+    
     def clear_log(self):
         """清空日志"""
         self.log_text.delete(1.0, tk.END)
         
+        # 如果开启了自动保存，在日志文件中记录清空操作
+        if self.auto_save_var.get() and self.log_file:
+            try:
+                timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                clear_msg = f"[{timestamp}] 用户手动清空日志\n"
+                self.log_file.write(clear_msg)
+                self.log_file.flush()
+            except Exception as e:
+                pass  # 忽略清空时的文件写入错误
+    
     def save_log(self):
-        """保存日志到文件"""
+        """手动保存日志到文件（保留原有功能作为备用）"""
         try:
-            filename = f"can_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+            filename = f"can_log_manual_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
             with open(filename, 'w', encoding='utf-8') as f:
                 f.write(self.log_text.get(1.0, tk.END))
             messagebox.showinfo("保存成功", f"日志已保存到: {filename}")
         except Exception as e:
             messagebox.showerror("保存失败", f"无法保存日志: {str(e)}")
+    
+    def __del__(self):
+        """析构函数，确保程序退出时关闭日志文件"""
+        if hasattr(self, 'log_file') and self.log_file:
+            try:
+                self.log_file.close()
+            except:
+                pass
         
     def connect_can(self):
         """连接CAN总线"""
@@ -1099,9 +1186,22 @@ class CANHostComputer:
                 self.send_data_tree.item(item, values=(can_id, send_status, count, status, send_time))
                 break
 
+    def start_auto_save_on_startup(self):
+        """程序启动时自动开始保存日志"""
+        if self.auto_save_var.get():
+            self.start_auto_save()
+
 def main():
     root = tk.Tk()
     app = CANHostComputer(root)
+    
+    # 设置窗口关闭事件处理
+    def on_closing():
+        if app.auto_save_var.get():
+            app.stop_auto_save()
+        root.destroy()
+    
+    root.protocol("WM_DELETE_WINDOW", on_closing)
     root.mainloop()
 
 if __name__ == "__main__":
