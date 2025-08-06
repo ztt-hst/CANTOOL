@@ -160,7 +160,10 @@ class CANHostComputer:
     def __init__(self, root):
         self.root = root
         self.root.title("CAN协议上位机 - 创芯科技CANalyst-II")
-        self.root.geometry("1000x800")  # 增加窗口高度以容纳发送数据表格
+        
+        # 设置窗口初始大小和最小尺寸
+        self.root.geometry("1200x800")  # 增加初始窗口大小
+        self.root.minsize(1000, 700)   # 设置最小尺寸
         
         # CAN相关变量
         self.can_bus = None
@@ -321,23 +324,45 @@ class CANHostComputer:
         self.heartbeat_status_var = tk.StringVar(value="正常")
         ttk.Label(stats_inner, textvariable=self.heartbeat_status_var).grid(row=0, column=5, padx=5)
         
+        # 创建左右分栏布局
+        content_frame = ttk.Frame(main_frame)
+        content_frame.pack(fill="both", expand=True, pady=5)
+        
+        # 左侧：发送数据和实时数据
+        left_frame = ttk.Frame(content_frame)
+        left_frame.pack(side="left", fill="both", expand=True, padx=(0, 5))
+        
         # 发送数据显示框架
-        send_data_frame = ttk.LabelFrame(main_frame, text="发送数据", padding="10")
+        send_data_frame = ttk.LabelFrame(left_frame, text="发送数据", padding="10")
         send_data_frame.pack(fill="x", pady=5)
         
         # 创建发送数据表格
         self.create_send_data_table(send_data_frame)
         
         # 实时数据表格显示框架
-        data_frame = ttk.LabelFrame(main_frame, text="实时数据", padding="10")
-        data_frame.pack(fill="x", pady=5)
+        data_frame = ttk.LabelFrame(left_frame, text="实时数据", padding="10")
+        data_frame.pack(fill="both", expand=True, pady=5)
         
         # 创建表格
         self.create_data_table(data_frame)
         
+        # 右侧：日志框架
+        right_frame = ttk.Frame(content_frame)
+        right_frame.pack(side="right", fill="both", expand=True, padx=(5, 0))
+        
         # 日志框架
-        log_frame = ttk.LabelFrame(main_frame, text="通信日志", padding="10")
-        log_frame.pack(fill="both", expand=True, pady=5)
+        log_frame = ttk.LabelFrame(right_frame, text="通信日志", padding="10")
+        log_frame.pack(fill="both", expand=True)
+        
+        # 日志控制按钮 - 移到日志文本框上方
+        log_btn_frame = ttk.Frame(log_frame)
+        log_btn_frame.pack(fill="x", pady=(0, 5))
+        
+        clear_btn = ttk.Button(log_btn_frame, text="清空日志", command=self.clear_log)
+        clear_btn.pack(side="left")
+        
+        save_btn = ttk.Button(log_btn_frame, text="保存日志", command=self.save_log)
+        save_btn.pack(side="left", padx=5)
         
         # 日志文本框
         self.log_text = scrolledtext.ScrolledText(log_frame, height=15)
@@ -345,16 +370,6 @@ class CANHostComputer:
         
         # 配置文本标签颜色
         self.log_text.tag_configure("heartbeat_red", foreground="red")
-        
-        # 日志控制按钮
-        log_btn_frame = ttk.Frame(log_frame)
-        log_btn_frame.pack(fill="x", pady=5)
-        
-        clear_btn = ttk.Button(log_btn_frame, text="清空日志", command=self.clear_log)
-        clear_btn.pack(side="left")
-        
-        save_btn = ttk.Button(log_btn_frame, text="保存日志", command=self.save_log)
-        save_btn.pack(side="left", padx=5)
         
     def clear_log(self):
         """清空日志"""
@@ -889,11 +904,11 @@ class CANHostComputer:
         """创建数据表格"""
         # 创建表格框架
         table_frame = ttk.Frame(parent)
-        table_frame.pack(fill="x")
+        table_frame.pack(fill="both", expand=True)
         
-        # 创建Treeview表格 - 添加刷新时间列
+        # 创建Treeview表格 - 调整高度
         columns = ('CAN ID', '参数', '数值', '单位', '状态', '刷新时间')
-        self.data_tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=8)
+        self.data_tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=12)  # 增加高度
         
         # 设置列标题
         for col in columns:
@@ -1027,9 +1042,9 @@ class CANHostComputer:
         table_frame = ttk.Frame(parent)
         table_frame.pack(fill="x")
         
-        # 创建Treeview表格 - 去掉单位列
+        # 创建Treeview表格 - 调整高度
         columns = ('CAN ID', '发送状态', '发送次数', '状态', '发送时间')
-        self.send_data_tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=4)
+        self.send_data_tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=3)  # 减少高度
         
         # 设置列标题
         for col in columns:
