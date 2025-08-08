@@ -178,7 +178,14 @@ class CANHostComputer:
         self.root.title("CAN协议上位机 - 创芯科技CANalyst-II")
         
         # 设置窗口初始大小和最小尺寸
-        self.root.geometry("1200x800")  # 增加初始窗口大小
+        #self.root.geometry("1200x800")  # 增加初始窗口大小
+        window_width = 1400
+        window_height = 900
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+        self.root.geometry(f"{window_width}x{window_height}+{x}+{y}")
         self.root.minsize(1000, 700)   # 设置最小尺寸
         # 设置窗口图标
         self.set_window_icon()
