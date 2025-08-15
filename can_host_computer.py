@@ -810,6 +810,23 @@ class CANHostComputer:
         except Exception as e:
             self.log_message(f"解析错误报文错误: {str(e)}")
     
+    def parse_new_message(self, msg):
+        """解析新的CAN报文"""
+        msg_id = msg['id']
+        data = msg['data']
+        
+        try:
+            # 使用通用解析函数
+            parsed_data = parse_can_message(msg_id, data)
+            if parsed_data:
+                # 统一使用现有的update_table_data方法
+                self.update_table_data(msg_id, parsed_data)
+                self.log_message(f"成功解析 0x{msg_id:03X}: {parsed_data}")
+            else:
+                self.log_message(f"无法解析报文: ID=0x{msg_id:03X}")
+        except Exception as e:
+            self.log_message(f"解析报文 0x{msg_id:03X} 出错: {str(e)}")
+    
     def monitor_heartbeat(self):
         """监控心跳的线程函数"""
         self.log_message("心跳监控线程已启动")
@@ -859,7 +876,18 @@ class CANHostComputer:
         """处理接收到的CAN报文"""
         msg_id = msg['id']
         
-        if msg_id in [0x351, 0x355, 0x356, 0x35A]:
+        # 扩展支持的CAN ID列表
+        supported_ids = [0x351, 0x355, 0x356, 0x35A]
+        
+        # 添加新的0x2nn系列ID支持
+        for i in range(16):  # 支持电池地址0-15
+            supported_ids.extend([
+                0x200 + i, 0x210 + i, 0x220 + i, 0x230 + i, 0x240 + i, 0x250 + i, 0x260 + i,
+                0x400 + i, 0x410 + i, 0x420 + i, 0x430 + i, 0x440 + i, 0x450 + i, 0x460 + i,
+                0x470 + i, 0x480 + i, 0x490 + i, 0x4A0 + i
+            ])
+        
+        if msg_id in supported_ids:
             self.log_message(f"解析报文: ID=0x{msg_id:03X}, 数据: {bytes(msg['data']).hex()}")
             
             # 根据协议解析具体内容
@@ -871,6 +899,9 @@ class CANHostComputer:
                 self.parse_battery_info_message(msg)
             elif msg_id == 0x35A:
                 self.parse_error_message(msg)
+            else:
+                # 处理新的CAN ID
+                self.parse_new_message(msg)
                 
     def handle_heartbeat_timeout(self):
         """处理心跳超时"""
@@ -1168,46 +1199,145 @@ class CANHostComputer:
         """更新表格数据"""
         lang = LANGUAGES[self.lang]
         current_time = datetime.now().strftime("%H:%M:%S")
-        
+
+        # ---------- 小工具：格式化标量 ----------
+        def fmt_scalar(key, val):
+            unit = ''
+            if key == 'operation_mode':
+                op = {
+                    1: "Standby Mode", 2: "Run Mode", 3: "Charge Disabled !",
+                    4: "Charge DC/DC !", 5: "Discharge Disabled !", 6: "Emergency !"
+                }
+                return op.get(val, f"模式{val}"), unit
+            if key in ('state_of_charge', 'state_of_health'):
+                return f"{float(val):.1f}", '%'
+            if 'voltage' in key:
+                return f"{float(val):.3f}", 'V'
+            if 'current' in key:
+                return f"{float(val):.1f}", 'A'
+            if 'temperature' in key:
+                return f"{float(val):.1f}", '°C'
+            if 'uptime' in key:
+                return f"{val}", 's'
+            if 'accelerometer' in key:
+                return f"{val}", 'milli-g'
+            if key == 'esp32_free_heap_size_byte':
+                return f"{val}", 'B'
+            if key in ('cycle_count', 'lifetime_hour', 'cell_balance_state', 'module_id'):
+                u = 'h' if key == 'lifetime_hour' else ('次' if key == 'cycle_count' else '')
+                return f"{val}", u
+            if isinstance(val, bool):
+                return str(int(val)), ''
+            return str(val), ''
+
+        # ---------- 各类报文专用处理 ----------
         if can_id == 0x351:
-            # 更新0x351数据
-            self.update_table_item('0x351', lang['table_351'][1][0], f"{parsed_data.get('charge_voltage_limit', 0):.1f}", 'V', lang['normal'], current_time)
-            self.update_table_item('0x351', lang['table_351'][2][0], f"{parsed_data.get('max_charge_current', 0):.1f}", 'A', lang['normal'], current_time)
-            self.update_table_item('0x351', lang['table_351'][3][0], f"{parsed_data.get('max_discharge_current', 0):.1f}", 'A', lang['normal'], current_time)
-            self.update_table_item('0x351', lang['table_351'][4][0], f"{parsed_data.get('discharge_voltage', 0):.1f}", 'V', lang['normal'], current_time)
-            
+            self.update_table_item('0x351', lang['table_351'][1][0],
+                                f"{parsed_data.get('charge_voltage_limit', 0):.1f}", 'V', lang['normal'], current_time)
+            self.update_table_item('0x351', lang['table_351'][2][0],
+                                f"{parsed_data.get('max_charge_current', 0):.1f}", 'A', lang['normal'], current_time)
+            self.update_table_item('0x351', lang['table_351'][3][0],
+                                f"{parsed_data.get('max_discharge_current', 0):.1f}", 'A', lang['normal'], current_time)
+            self.update_table_item('0x351', lang['table_351'][4][0],
+                                f"{parsed_data.get('discharge_voltage', 0):.1f}", 'V', lang['normal'], current_time)
+
         elif can_id == 0x355:
-            # 更新0x355数据
-            self.update_table_item('0x355', lang['table_355'][0][0], f"{parsed_data.get('soc_value', 0)}", '%', lang['normal'], current_time)
-            self.update_table_item('0x355', lang['table_355'][1][0], f"{parsed_data.get('soh_value', 0)}", '%', lang['normal'], current_time)
-            self.update_table_item('0x355', lang['table_355'][2][0], f"{parsed_data.get('high_res_soc', 0):.2f}", '%', lang['normal'], current_time)
-            
+            self.update_table_item('0x355', lang['table_355'][0][0],
+                                f"{parsed_data.get('soc_value', 0)}", '%', lang['normal'], current_time)
+            self.update_table_item('0x355', lang['table_355'][1][0],
+                                f"{parsed_data.get('soh_value', 0)}", '%', lang['normal'], current_time)
+            self.update_table_item('0x355', lang['table_355'][2][0],
+                                f"{parsed_data.get('high_res_soc', 0):.2f}", '%', lang['normal'], current_time)
+
         elif can_id == 0x356:
-            # 更新0x356数据
-            self.update_table_item('0x356', lang['table_356'][0][0], f"{parsed_data.get('battery_voltage', 0):.2f}", 'V', lang['normal'], current_time)
-            self.update_table_item('0x356', lang['table_356'][1][0], f"{parsed_data.get('battery_current', 0):.1f}", 'A', lang['normal'], current_time)
-            self.update_table_item('0x356', lang['table_356'][2][0], f"{parsed_data.get('battery_temperature', 0):.1f}", '°C', lang['normal'], current_time)
-            
+            self.update_table_item('0x356', lang['table_356'][0][0],
+                                f"{parsed_data.get('battery_voltage', 0):.2f}", 'V', lang['normal'], current_time)
+            self.update_table_item('0x356', lang['table_356'][1][0],
+                                f"{parsed_data.get('battery_current', 0):.1f}", 'A', lang['normal'], current_time)
+            self.update_table_item('0x356', lang['table_356'][2][0],
+                                f"{parsed_data.get('battery_temperature', 0):.1f}", '°C', lang['normal'], current_time)
+
         elif can_id == 0x35A:
-            # 更新0x35A报警和警告状态
             alarms = parsed_data.get('alarms', {})
             warnings = parsed_data.get('warnings', {})
-            
-            # 更新Alarm信息
-            for i, (label, key) in enumerate(lang['table_35A_alarm']):
-                self.update_table_item('0x35A', label, lang['yes'] if alarms.get(key, False) else lang['no'], '', lang['normal'], current_time)
-            
-            # 更新Warning信息
+            for label, key in lang['table_35A_alarm']:
+                self.update_table_item('0x35A', label, int(alarms.get(key, False)), '', lang['normal'], current_time)
             for label, key in lang['table_35A_warning']:
-                self.update_table_item('0x35A', label, lang['yes'] if warnings.get(key, False) else lang['no'], '', lang['normal'], current_time)
-    
+                self.update_table_item('0x35A', label, int(warnings.get(key, False)), '', lang['normal'], current_time)
+
+        else:
+            battery_addr = parsed_data.get('battery_address', 1)
+            can_id_key = can_id
+            if 0x200 <= can_id <= 0x2FF:
+                can_id_key = can_id & 0xFF0
+            elif 0x400 <= can_id <= 0x4FF:
+                can_id_key = can_id & 0xFF0
+
+            table_key = f'table_{can_id_key:X}'
+            can_id_display = f"0x{can_id:03X}"
+            if battery_addr != 1 or (can_id >= 0x200):
+                can_id_display = f"0x{can_id:03X}(电池{battery_addr})"
+
+            # ---------- 0x200 专用分段 ----------
+            if can_id_key == 0x200:
+                base_tbl = lang.get('table_200_base', [])
+                status_tbl = lang.get('table_200_status', [])
+                alarm_tbl = lang.get('table_200_alarms', [])
+
+                if base_tbl or status_tbl or alarm_tbl:
+                    for label, data_key in base_tbl:
+                        if data_key not in parsed_data:
+                            continue
+                        val, unit = fmt_scalar(data_key, parsed_data[data_key])
+                        self.update_table_item(can_id_display, label, val, unit, lang['normal'], current_time)
+
+                    st = parsed_data.get('status', {})
+                    for label, key in status_tbl:
+                        self.update_table_item(can_id_display, label, int(st.get(key, False)), '', lang['normal'], current_time)
+
+                    al = parsed_data.get('alarms', {})
+                    for label, key in alarm_tbl:
+                        self.update_table_item(can_id_display, label, int(al.get(key, False)), '', lang['normal'], current_time)
+                    return
+                else:
+                    # 旧版 table_200 回退
+                    for label, data_key in lang.get('table_200', []):
+                        if data_key in parsed_data:
+                            val, unit = fmt_scalar(data_key, parsed_data[data_key])
+                        elif data_key in ('status', 'alarms'):
+                            d = parsed_data.get(data_key, {})
+                            if isinstance(d, dict):
+                                on = [k for k, v in d.items() if v]
+                                val = '、'.join(on) if on else '正常'
+                                unit = ''
+                            else:
+                                val = str(d)
+                                unit = ''
+                        else:
+                            continue
+                        self.update_table_item(can_id_display, label, val, unit, lang['normal'], current_time)
+                    return
+
+            # ---------- 其它 CAN ID ----------
+            if table_key not in lang:
+                return
+            for label, data_key in lang[table_key]:
+                if data_key not in parsed_data:
+                    continue
+                val, unit = fmt_scalar(data_key, parsed_data[data_key])
+                self.update_table_item(can_id_display, label, val, unit, lang['normal'], current_time)
+
     def update_table_item(self, can_id, parameter, value, unit, status, update_time):
-        """更新表格中的单个项目"""
+        """更新表格中的单个项目，如果不存在则创建"""
+        # 先检查是否已存在该项目
         for item in self.data_tree.get_children():
             values = self.data_tree.item(item)['values']
             if values[0] == can_id and values[1] == parameter:
                 self.data_tree.item(item, values=(can_id, parameter, value, unit, status, update_time))
-                break
+                return
+        
+        # 如果不存在，创建新条目
+        self.data_tree.insert('', 'end', values=(can_id, parameter, value, unit, status, update_time))
 
     def create_send_data_table(self, parent):
         """创建发送数据表格"""

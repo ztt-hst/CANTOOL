@@ -1,0 +1,231 @@
+﻿CAN ID,CAN Byte,CAN Byte bit,Name,Count,Type,Scale Factor,Units,Min,Max,Description
+n = battery address,,,,,,,,,,Uses little-endian data types.
+0x20n,,,,,,,,,,Every 1 second or if alarms/status changes
+0x20n,0,,operation_mode,,enum,,,1,6,Operation mode
+,0,,Standby Mode,,,,,,,"1.Standby Mode
+Condition: Charge and discharge MOSFETs are open, DC/DC is off.
+State: System is idle, waiting for alarms to clear to transition to another state."
+,0,,Run Mode,,,,,,,"2.Run Mode
+Condition: No alarms; MOSFETs are closed.
+State: Battery is actively operating normally."
+,0,,Charge Disabled Mode,,,,,,,"3.Charge Disabled Mode
+Condition: Charge MOSFETs are open, DC/DC is off, discharge MOSFETs are closed.
+State: Charging is blocked, but discharging is allowed."
+,0,,Charge DC/DC Mode,,,,,,,"4.Charge DC/DC Mode
+Condition: Charge MOSFETs are open and DC/DC is on, discharge MOSFETs are closed.State: Battery is actively charging."
+,0,,Discharge Disabled Mode,,,,,,,"5.Discharge Disabled Mode
+Condition: Discharge MOSFETs are open; charge MOSFETs are closed or DC/DC is running.
+State: Discharging is blocked, but charging is allowed."
+,0,,Emergency Mode,,,,,,,"6.Emergency Mode
+Condition:  Charge and discharge MOSFETs are open, DC/DC is off, MCB (Miniature Circuit Breaker) is open (disconnected).
+State: System is in critical failure mode, requiring manual intervention."
+0x20n,1,,state_of_charge,,U8,0.5,%,0,100,SOC in 0.5% resolution
+0x20n,2,,status,,bitfield16,,,,,Status bits as a 16 bit bitfield
+0x20n,3,,,,,,,,,
+,2,0,Heater,,,,,,,"0: output disabled, 1: output enabled. Used for external devices such as lock or heater."
+,2,1,MCB status,,,,,,,"0: MCB is closed, connected, 1: MCB is open, i.e. disconnected"
+,2,2,Top Up,,,,,,,1: Top up mode is active
+,2,3,Soft Start,,,,,,,1: Soft Start is active
+,2,4,OCC Recovery,,,,,,,1: OCC Recovery is active
+,2,5,,,,,,,,
+,2,6,,,,,,,,
+,2,7,,,,,,,,NOTE: This whole 16-bit bitfield need to be adjusted according to actualy implementation
+,3,0,,,,,,,,
+,3,1,,,,,,,,
+,3,2,,,,,,,,
+,3,3,,,,,,,,
+,3,4,,,,,,,,
+,3,5,,,,,,,,
+,3,6,,,,,,,,
+,3,7,,,,,,,,
+0x20n,4,,alarms,,bitfield32,,,,,Alarms bits as a 32 bit bitfield
+0x20n,5,,,,,,,,,
+0x20n,6,,,,,,,,,
+0x20n,7,,,,,,,,,
+,4,0,Cell over temperature charge (COTC),,,,,,,NOTE: This whole 32-bit bitfield need to be adjusted according to actualy implementation
+,4,1,"Cell Over Temperature Discharge (COTD)
+",,,,,,,
+,4,2,Cell Under Temperature Charge (CUTC),,,,,,,
+,4,3,Cell Under Temperature Discharge (CUTD),,,,,,,
+,4,4,System Lock,,,,,,,
+,4,5,Short Circuit Detection (SCD),,,,,,,
+,4,6,MOSFET Over Temperature (MOT),,,,,,,
+,4,7,DC/DC Over Temperature (DCDC_OT),,,,,,,
+,5,0,Current Measurement Comparison (CMC),,,,,,,
+,5,1,Battery Voltage Plausibility Check (BVP),,,,,,,
+,5,2,Cell Temperature Difference (CTD),,,,,,,
+,5,3,MCB trip (MCB_trip),,,,,,,
+,5,4,Unexpected Current Measurement (UCM),,,,,,,
+,5,5,External Watchdog (WDT),,,,,,,
+,5,6,UNDER_SOC_MIN_WARNING (U_SOC),,,,,,,
+,5,7,Cell under voltage Critical (CUVC),,,,,,,
+,6,0,Cell Under Voltage (CUV),,,,,,,
+,6,1,Cell Over Voltage (COV),,,,,,,
+,6,2,Over Current Charge (OCC),,,,,,,
+,6,3,Over Current Discharge (OCD),,,,,,,
+,6,4,Reserved,,,,,,,
+,6,5,Reserved,,,,,,,
+,6,6,Reserved,,,,,,,
+,6,7,Reserved,,,,,,,
+,7,0,Reserved,,,,,,,
+,7,1,Reserved,,,,,,,
+,7,2,Reserved,,,,,,,
+,7,3,Reserved,,,,,,,
+,7,4,Reserved,,,,,,,
+,7,5,Reserved,,,,,,,
+,7,6,Reserved,,,,,,,
+,7,7,Reserved,,,,,,,
+0x21n,,,,,,,,,,Every 1 second
+0x21n,0,,battery_current,,S16,0.1,A,-3276.8,3276.7,Battery current in dA
+0x21n,1,,,,,,,,,
+0x21n,2,,battery_voltage,,U16,0.001,V,0,65.535,Battery voltage in mV
+0x21n,3,,,,,,,,,
+0x21n,4,,rail_voltage,,U16,0.001,V,0,65.535,Rail voltage in mV
+0x21n,5,,,,,,,,,
+0x21n,6,,fet_temperature,,S16,0.1,dC,-3276.8,3276.7,MOSFET temperature in deci-Celcius
+0x21n,7,,,,,,,,,
+0x22n,,,,,,,,,,Every 1 second
+0x22n,0,,cell_voltage_1,,U16,0.001,V,0,65.535,Cell voltage 1 in mV
+0x22n,1,,,,,,,,,
+0x22n,2,,cell_voltage_2,,U16,0.001,V,0,65.535,Cell voltage 2 in mV
+0x22n,3,,,,,,,,,
+0x22n,4,,cell_voltage_3,,U16,0.001,V,0,65.535,Cell voltage 3 in mV
+0x22n,5,,,,,,,,,
+0x22n,6,,cell_voltage_4,,U16,0.001,V,0,65.535,Cell voltage 4 in mV
+0x22n,7,,,,,,,,,
+0x23n,,,,,,,,,,Every 1 second
+0x23n,0,,cell_voltage_5,,U16,0.001,V,0,65.535,Cell voltage 5 in mV
+0x23n,1,,,,,,,,,
+0x23n,2,,cell_voltage_6,,U16,0.001,V,0,65.535,Cell voltage 6 in mV
+0x23n,3,,,,,,,,,
+0x23n,4,,cell_voltage_7,,U16,0.001,V,0,65.535,Cell voltage 7 in mV
+0x23n,5,,,,,,,,,
+0x23n,6,,cell_voltage_8,,U16,0.001,V,0,65.535,Cell voltage 8 in mV
+0x23n,7,,,,,,,,,
+0x24n,,,,,,,,,,Every 1 second
+0x24n,0,,cell_voltage_9,,U16,0.001,V,0,65.535,Cell voltage 9 in mV
+0x24n,1,,,,,,,,,
+0x24n,2,,cell_voltage_10,,U16,0.001,V,0,65.535,Cell voltage 10 in mV
+0x24n,3,,,,,,,,,
+0x24n,4,,cell_voltage_11,,U16,0.001,V,0,65.535,Cell voltage 11 in mV
+0x24n,5,,,,,,,,,
+0x24n,6,,cell_voltage_12,,U16,0.001,V,0,65.535,Cell voltage 12 in mV
+0x24n,7,,,,,,,,,
+0x25n,,,,,,,,,,Every 1 second
+0x25n,0,,cell_voltage_13,,U16,0.001,V,0,65.535,Cell voltage 13 in mV
+0x25n,1,,,,,,,,,
+0x25n,2,,cell_voltage_14,,U16,0.001,V,0,65.535,Cell voltage 14 in mV
+0x25n,3,,,,,,,,,
+0x25n,4,,cell_voltage_15,,U16,0.001,V,0,65.535,Cell voltage 15 in mV
+0x25n,5,,,,,,,,,
+0x25n,6,,cell_voltage_16,,U16,0.001,V,0,65.535,Cell voltage 16 in mV
+0x25n,7,,,,,,,,,
+0x26n,,,,,,,,,,Every 5 second
+0x26n,0,,cell_temperature_1,,S16,0.1,dC,-3276.8,3276.7,Cell temperature 1 in deci-Celcius
+0x26n,1,,,,,,,,,
+0x26n,2,,cell_temperature_2,,S16,0.1,dC,-3276.8,3276.7,Cell temperature 2 in deci-Celcius
+0x26n,3,,,,,,,,,
+0x26n,4,,cell_temperature_3,,S16,0.1,dC,-3276.8,3276.7,Cell temperature 3 in deci-Celcius
+0x26n,5,,,,,,,,,
+0x26n,6,,cell_temperature_4,,S16,0.1,dC,-3276.8,3276.7,Cell temperature 4 in deci-Celcius
+0x26n,7,,,,,,,,,
+0x40n,,,,,,,,,,Every 10 second
+0x40n,0,,dcdc_temperature_deci_celsius,,S16,0.1,dC,-3276.8,3276.7,DCDC temperature 1 in deci-Celcius
+0x40n,1,,,,,,,,,
+0x40n,2,,pos_terminal_temp_deci_celsius,,S16,0.1,V,-3276.8,3276.7,Positive terminal temperature 2 in deci-Celcius
+0x40n,3,,,,,,,,,
+0x40n,4,,neg_terminal_temp_deci_celsius,,S16,0.1,V,-3276.8,3276.7,Negative terminal temperature 2 in deci-Celcius
+0x40n,5,,,,,,,,,
+0x40n,6,,Reserved,,,,,,,Reserved 2 bytes
+0x40n,7,,,,,,,,,
+0x41n,,,,,,,,,,Every 10 second
+0x41n,0,,neg_bat_temp_1_deci_celsius,,S16,0.1,V,-3276.8,3276.7,Negative internal cable joint 1 in deci-Celcius
+0x41n,1,,,,,,,,,
+0x41n,2,,neg_bat_temp_2_deci_celsius,,S16,0.1,V,-3276.8,3276.7,Negative internal cable joint 2 in deci-Celcius
+0x41n,3,,,,,,,,,
+0x41n,4,,pos_bat_temp_cb_deci_celsius,,S16,0.1,V,-3276.8,3276.7,Positive internal cable joint in deci-Celcius
+0x41n,5,,,,,,,,,
+0x41n,6,,Reserved,,,,,,,Reserved 2 bytes
+0x41n,7,,,,,,,,,
+0x42n,,,,,,,,,,Every 30 second
+0x42n,0,,state_of_health,,U8,0.5,%,0,100,SOC in 0.5% resolution
+0x42n,1,,cycle_count,,U16,1,,0,65535,Lifetime number of cycle
+0x42n,2,,,,,,,,,
+0x42n,3,,lifetime_hour,,U24,1,h,0,2^24 - 1,Lifetime in hours
+0x42n,4,,,,,,,,,
+0x42n,5,,,,,,,,,
+0x42n,6,,cell_balance_state,,U16,1,,,,Cell balaning state
+0x42n,7,,,,,,,,,
+0x43n,,,,,,,,,,Every 60 second
+0x43n,0,,mcu_uptime_seconds,,U32,1,s,0,2^32 - 1,MCU uptime in seconds
+0x43n,1,,,,,,,,,
+0x43n,2,,,,,,,,,
+0x43n,3,,,,,,,,,
+0x43n,4,,mcu_temperature_deci_celsius,,S16,0.1,dC,-3276.8,3276.7,MCU temperature in deci-Celcius
+0x43n,5,,,,,,,,,
+0x43n,6,,afe_temperature_deci_celsius,,S16,0.1,dC,-3276.8,3276.7,AFE temperature in deci-Celcius
+0x43n,7,,,,,,,,,
+0x44n,,,,,,,,,,Every 60 second
+0x44n,0,,esp32_uptime_seconds,,U32,1,s,0,2^32 - 1,ESP32 uptime in seconds
+0x44n,1,,,,,,,,,
+0x44n,2,,,,,,,,,
+0x44n,3,,,,,,,,,
+0x44n,4,,  esp32_free_heap_size_byte,,U24,1,B,0,2^24 - 1,Available memory in ESP32
+0x44n,5,,,,,,,,,
+0x44n,6,,,,,,,,,
+0x44n,7,,esp32_temperature_celsius,,S8,1,C,-128,127,ESP32 temperature in Celcius
+0x45n,,,,,,,,,,At start up and on request
+0x45n,0,,controller_version,,char 8,,,,,controller_version first 8 chars
+0x45n,1,,,,,,,,,
+0x45n,2,,,,,,,,,
+0x45n,3,,,,,,,,,
+0x45n,4,,,,,,,,,
+0x45n,5,,,,,,,,,
+0x45n,6,,,,,,,,,
+0x45n,7,,,,,,,,,
+0x46n,,,,,,,,,,At start up and on request
+0x46n,0,,controller_version,,char 8,,,,,controller_version last 8 chars
+0x46n,1,,,,,,,,,
+0x46n,2,,,,,,,,,
+0x46n,3,,,,,,,,,
+0x46n,4,,,,,,,,,
+0x46n,5,,,,,,,,,
+0x46n,6,,,,,,,,,
+0x46n,7,,,,,,,,,
+0x47n,,,,,,,,,,At start up and on request
+0x47n,0,,bms_version,,char 8,,,,,bms_version first 8 chars
+0x47n,1,,,,,,,,,
+0x47n,2,,,,,,,,,
+0x47n,3,,,,,,,,,
+0x47n,4,,,,,,,,,
+0x47n,5,,,,,,,,,
+0x47n,6,,,,,,,,,
+0x47n,7,,,,,,,,,
+0x48n,,,,,,,,,,At start up and on request
+0x48n,0,,bms_version,,char 8,,,,,bms_version last 8 chars
+0x48n,1,,,,,,,,,
+0x48n,2,,,,,,,,,
+0x48n,3,,,,,,,,,
+0x48n,4,,,,,,,,,
+0x48n,5,,,,,,,,,
+0x48n,6,,,,,,,,,
+0x48n,7,,,,,,,,,
+0x49n,,,,,,,,,,At start up and on request
+0x49n,0,,accelerometer_x,,S16,1,milli-g,-32768,32767,Accelerometer x in g
+0x49n,1,,,,,,,,,
+0x49n,2,,accelerometer_y,,S16,1,milli-g,-32768,32767,Accelerometer y in g
+0x49n,3,,,,,,,,,
+0x49n,4,,accelerometer_z,,S16,1,milli-g,-32768,32767,Accelerometer z in g
+0x49n,5,,,,,,,,,
+0x49n,6,,Reserved,,,,,,,Reserved 2 bytes
+0x49n,7,,,,,,,,,
+0x4An,,,,,,,,,,At start up and on request
+0x4An,0,," esp32_mac_address
+",,EUI48,,,,,The MAC address of the ESP32
+0x4An,1,,,,,,,,,
+0x4An,2,,,,,,,,,
+0x4An,3,,,,,,,,,
+0x4An,4,,,,,,,,,
+0x4An,5,,,,,,,,,
+0x4An,6,,module_id,,U8,1,,1,16,Physical position of the battery in bank/stack counting from top.
+0x4An,7,,,,,,,,,Reserved byte
