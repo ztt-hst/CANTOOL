@@ -401,11 +401,11 @@ def parse_20n_message(data, battery_address=1):
         # Status bits (16-bit bitfield from bytes 2-3)
         status_bits = unsigned_16bit(data[3], data[2])
         status = {
-            'heater': bool(status_bits & 0x01),
-            'mcb_status': bool(status_bits & 0x02),
-            'top_up': bool(status_bits & 0x04),
-            'soft_start': bool(status_bits & 0x08),
-            'occ_recovery': bool(status_bits & 0x10),
+            'Heater': bool(status_bits & 0x01),
+            'MCB status': bool(status_bits & 0x02),
+            'Top Up': bool(status_bits & 0x04),
+            'Soft Start': bool(status_bits & 0x08),
+            'OCC Recovery': bool(status_bits & 0x10),
         }
         
         # Alarms (32-bit bitfield from bytes 4-7)

@@ -102,7 +102,6 @@ LANGUAGES = {
         'table_200_status':[
             ('加热器', 'Heater'),
             ('MCB状态', 'MCB status'),
-            ('电池低温警告', 'battery_low_temp'),
             ('Top Up', 'Top Up'),
             ('Soft Start', 'Soft Start'),
             ('OCC Recovery', 'OCC Recovery'),
@@ -314,7 +313,6 @@ LANGUAGES = {
         'table_200_status':[
             ('Heater', 'Heater'),
             ('MCB status', 'MCB status'),
-            ('battery_low_temp', 'battery_low_temp'),
             ('Top Up', 'Top Up'),
             ('Soft Start', 'Soft Start'),
             ('OCC Recovery', 'OCC Recovery'),

@@ -621,7 +621,8 @@ class CANHostComputer:
         self.stop_btn.config(state="disabled")
         self.receive_check.config(state="disabled")  # 禁用接收复选框
         self.receive_var.set(False)  # 取消勾选
-        
+        self.toggle_receive()
+
         lang = LANGUAGES[self.lang]
         self.status_var.set(lang['disconnected'])
         self.heartbeat_count = 0  # 重置心跳计数
@@ -1082,37 +1083,6 @@ class CANHostComputer:
         
         self.log_message("停止接收CAN报文。", color="green")
 
-    def monitor_receive(self):
-        """接收报文的独立线程函数"""
-        self.log_message("接收报文线程已启动")
-        while self.is_running and self.is_connected and self.receive_var.get():
-            try:
-                messages = self.can_bus.receive(timeout=50) # 更短的超时时间
-                if messages:
-                    self.log_message(f"接收到 {len(messages)} 个报文")
-                    for msg in messages:
-                        self.received_count += 1
-                        self.received_count_var.set(str(self.received_count))
-                        self.process_received_message(msg)
-                        
-                        # 检查心跳报文
-                        if msg['id'] == 0x351:
-                            self.last_heartbeat_time = time.time()
-                            lang = LANGUAGES[self.lang]
-                            self.heartbeat_status_var.set(lang['normal'])
-                            self.heartbeat_status_label.config(foreground="black") # 恢复黑色
-                            self.log_message(f"收到心跳: ID=0x351, 数据: {bytes(msg['data']).hex()}")
-                else:
-                    # 减少调试信息频率
-                    if time.time() % 10 < 0.1:  # 每10秒显示一次
-                        self.log_message("正在监听CAN报文...")
-                            
-            except Exception as e:
-                self.log_message(f"接收线程错误: {str(e)}")
-                # 检查心跳超时
-                if self.last_heartbeat_time and (time.time() - self.last_heartbeat_time) > 3:
-                    self.root.after(0, self.handle_heartbeat_timeout)
-
     def create_data_table(self, parent):
         """创建数据表格"""
         # 创建表格框架
@@ -1215,7 +1185,7 @@ class CANHostComputer:
                 return f"{float(val):.3f}", 'V'
             if 'current' in key:
                 return f"{float(val):.1f}", 'A'
-            if 'temperature' in key:
+            if ('temperature' in key) or ('temp' in key):
                 return f"{float(val):.1f}", '°C'
             if 'uptime' in key:
                 return f"{val}", 's'
